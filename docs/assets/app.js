@@ -359,3 +359,56 @@ $('#fit-live-graph').addEventListener('click',drawLiveGraph);
 $('#toggle-live-labels').addEventListener('click',()=>{graphLabels=!graphLabels;drawLiveGraph();});
 addEventListener('resize',()=>{if(liveData)drawLiveGraph();});
 checkLocalApi();
+
+// Professional application routing and responsive navigation.
+(() => {
+  const pageTitles = {
+    overview: 'Overview',
+    graph: 'Site graph',
+    tools: 'Audit tools',
+    scoring: 'Scoring models',
+    reports: 'Reports',
+    lab: 'Browser lab'
+  };
+  const validRoutes = new Set(Object.keys(pageTitles));
+  const routeFromHash = () => {
+    const value = location.hash.replace(/^#\/?/, '').split(/[?#]/)[0];
+    return validRoutes.has(value) ? value : 'overview';
+  };
+  const renderRoute = () => {
+    const route = routeFromHash();
+    document.querySelectorAll('[data-page]').forEach(page => page.classList.toggle('active', page.dataset.page === route));
+    document.querySelectorAll('[data-route-link]').forEach(link => {
+      const active = link.dataset.routeLink === route;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+    const title = document.querySelector('#route-title');
+    if (title) title.textContent = pageTitles[route];
+    document.title = `${pageTitles[route]} · SEO-INDEX VariScripts`;
+    document.body.classList.remove('nav-open');
+    const toggle = document.querySelector('#nav-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    window.scrollTo({top: 0, behavior: 'instant'});
+  };
+  window.addEventListener('hashchange', renderRoute);
+  renderRoute();
+
+  const toggle = document.querySelector('#nav-toggle');
+  const scrim = document.querySelector('#nav-scrim');
+  const toggleNav = () => {
+    const open = document.body.classList.toggle('nav-open');
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+  };
+  if (toggle) toggle.addEventListener('click', toggleNav);
+  if (scrim) scrim.addEventListener('click', toggleNav);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.body.classList.contains('nav-open')) toggleNav();
+  });
+
+  const environmentLabel = document.querySelector('#environment-label');
+  if (environmentLabel) {
+    const local = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
+    environmentLabel.textContent = local ? 'Local live mode' : 'Hosted mode';
+  }
+})();
