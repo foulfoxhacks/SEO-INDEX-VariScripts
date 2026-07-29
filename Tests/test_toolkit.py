@@ -18,6 +18,7 @@ assert spec and spec.loader
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 import seo_index_extensions as extensions
+import seo_index_site as site
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -60,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
  {{"@type":"FAQPage","mainEntity":[{{"@type":"Question","name":"What is this fixture?","acceptedAnswer":{{"@type":"Answer","text":"A deterministic test page."}}}}]}}
  ]}}</script>
 </head><body>
-<nav><a href="{host}/about">About</a><a href="{host}/contact">Contact</a></nav>
+<nav><a href="{host}/about">About</a><a href="{host}/contact">Contact</a><a href="{host}/missing">Read more</a></nav>
 <main><h1>Fixture</h1><h2>What is this fixture?</h2><p>{'This is a concise crawlable answer with useful text. ' * 9}</p>
 <h2>How does it work?</h2><p>{'The toolkit inspects machine-readable and human-readable signals. ' * 8}</p>
 <ul><li>One</li><li>Two</li></ul><p><a href="https://schema.org/WebPage">Source documentation</a></p></main>
@@ -157,6 +158,40 @@ class ToolkitTests(unittest.TestCase):
         collection = module.fetch_sitemaps([self.origin + "/sitemap.xml"], 5, "test-agent")
         self.assertEqual(len(collection.entries), 2)
         self.assertFalse(collection.errors)
+
+    def test_internal_link_graph(self):
+        report = site.crawl_internal_links(
+            self.origin + "/",
+            sitemap=self.origin + "/sitemap.xml",
+            max_pages=20,
+            max_depth=3,
+            timeout=5,
+            user_agent="test-agent",
+            robots_agent="Googlebot",
+            delay_ms=0,
+        )
+        self.assertGreaterEqual(report.summary["pagesCrawled"], 4)
+        self.assertGreaterEqual(report.summary["internalEdges"], 3)
+        self.assertEqual(report.summary["brokenPages"], 1)
+        self.assertIn(self.origin + "/fr/", report.findings["orphanCandidates"])
+        self.assertTrue(report.findings["genericAnchors"])
+
+    def test_internal_link_graph_html(self):
+        report = site.crawl_internal_links(
+            self.origin + "/", max_pages=10, max_depth=2, timeout=5,
+            user_agent="test-agent", delay_ms=0,
+        )
+        output = Path(__file__).with_name("_link_graph_report.html")
+        try:
+            site.write_link_report_html(report, str(output))
+            content = output.read_text(encoding="utf-8")
+            self.assertIn("Internal Link Graph", content)
+            self.assertIn('type="application/json"', content)
+        finally:
+            output.unlink(missing_ok=True)
+
+    def test_private_target_detection(self):
+        self.assertTrue(site._is_private_target(self.origin + "/"))
 
 
 if __name__ == "__main__":

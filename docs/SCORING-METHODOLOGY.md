@@ -92,3 +92,9 @@ When official documentation changes, update:
 4. tests and changelog
 
 Every profile must total 100 category points. Every category must total 100 factor-percent points.
+
+## Page scores versus site intelligence
+
+The readiness profiles score evidence available for one page. Site-wide conditions such as orphan status, click depth, duplicate title clusters, internal-link importance, and sitemap inventory completeness are reported by Internal Link Graph and are not silently blended into a page score.
+
+This separation prevents a strong page from masking a weak site architecture, or a healthy site structure from averaging away a page-level eligibility failure.

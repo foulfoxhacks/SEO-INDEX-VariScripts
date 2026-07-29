@@ -37,13 +37,13 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Optional
 from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 TOOL_NAME = "SEO-INDEX VariScripts"
 DEFAULT_USER_AGENT = f"SEO-INDEX-VariScripts/{VERSION}"
 SUPPORTED_SCHEMES = {"http", "https"}
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,128}$")
 DIRECTIVE_SPLIT = re.compile(r"[\s,]+")
-WORKBENCH_URL = "https://foulfoxhacks.github.io/SEO-INDEX-VariScripts/"
+WORKBENCH_URL = "https://webtools.mellozone.site/"
 
 
 class ToolkitError(RuntimeError):
@@ -1351,8 +1351,10 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
         print("  8. Structured Data Graph")
         print("  9. GEO / Entity Discoverability")
         print(" 10. AEO / Answer Extractability")
-        print(" 11. List scoring profiles")
-        print(" 12. Open graphical workbench")
+        print(" 11. Internal Link Graph")
+        print(" 12. Start local graphical workbench")
+        print(" 13. List scoring profiles")
+        print(" 14. Open hosted graphical workbench")
         print("  0. Exit")
         choice = input("\nSelection: ").strip()
         print()
@@ -1453,12 +1455,31 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
                     url=prompt("Page URL"), timeout=30, user_agent=DEFAULT_USER_AGENT, json=None,
                 ), console)
             elif choice == "11":
+                from seo_index_site import run_links
+                run_links(argparse.Namespace(
+                    url=prompt("Start URL"), sitemap=prompt("Sitemap URL (optional)") or None,
+                    max_pages=int(prompt("Maximum pages", "250")), max_depth=int(prompt("Maximum depth", "6")),
+                    delay_ms=int(prompt("Delay between requests in ms", "75")), robots_agent="Googlebot",
+                    include_subdomains=False, ignore_robots=False, follow_nofollow=False, drop_query=False,
+                    timeout=20, user_agent=DEFAULT_USER_AGENT, show=15, progress=True,
+                    json=prompt("JSON report path (optional)") or None,
+                    html=prompt("Graphical HTML report path (optional)") or None,
+                    fail_on_broken=False,
+                ), console)
+            elif choice == "12":
+                from seo_index_site import serve_workbench
+                serve_workbench(argparse.Namespace(
+                    host="127.0.0.1", port=8765, docs_dir=None, no_open=False,
+                    allow_remote=False, allow_private_targets=False, api_max_pages=500,
+                    verbose=False,
+                ), console)
+            elif choice == "13":
                 profiles = load_profiles(profile_file)
                 for name, profile in profiles.items():
                     print(f"  {name:8s} {profile['label']}")
                     print(textwrap.fill(profile["description"], width=76, initial_indent="           ", subsequent_indent="           "))
                 print()
-            elif choice == "12":
+            elif choice == "14":
                 print(f"Opening {WORKBENCH_URL}")
                 webbrowser.open(WORKBENCH_URL)
                 print()
@@ -1564,7 +1585,35 @@ def build_parser() -> argparse.ArgumentParser:
     aeo.add_argument("--json")
     add_common_http_args(aeo)
 
-    web = subparsers.add_parser("web", help="Open the GitHub Pages graphical workbench.")
+    links = subparsers.add_parser("links", help="Crawl and graph internal links, depth, orphans, redirects, and dead ends.")
+    links.add_argument("--url", required=True, help="Starting page URL.")
+    links.add_argument("--sitemap", help="Optional sitemap used to identify orphan candidates.")
+    links.add_argument("--max-pages", type=int, default=250)
+    links.add_argument("--max-depth", type=int, default=6)
+    links.add_argument("--delay-ms", type=int, default=75)
+    links.add_argument("--robots-agent", default="Googlebot", help="User-agent used when evaluating robots.txt.")
+    links.add_argument("--include-subdomains", action="store_true")
+    links.add_argument("--ignore-robots", action="store_true")
+    links.add_argument("--follow-nofollow", action="store_true")
+    links.add_argument("--drop-query", action="store_true", help="Collapse query variants into the path URL.")
+    links.add_argument("--progress", action="store_true")
+    links.add_argument("--show", type=int, default=15, help="Number of highest-importance pages to print.")
+    links.add_argument("--json", help="Write the graph report as JSON.")
+    links.add_argument("--html", help="Write a standalone interactive HTML graph report.")
+    links.add_argument("--fail-on-broken", action="store_true", help="Exit 2 when broken pages are found.")
+    add_common_http_args(links)
+
+    serve = subparsers.add_parser("serve", help="Start the token-protected local graphical workbench and live audit API.")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--docs-dir", help="Alternate workbench directory containing index.html.")
+    serve.add_argument("--no-open", action="store_true", help="Do not open the browser automatically.")
+    serve.add_argument("--allow-remote", action="store_true", help="Permit binding to a non-loopback interface.")
+    serve.add_argument("--allow-private-targets", action="store_true", help="Permit audits of private or loopback targets.")
+    serve.add_argument("--api-max-pages", type=int, default=500, help="Maximum pages accepted by one browser API crawl.")
+    serve.add_argument("--verbose", action="store_true", help="Print local HTTP request logs.")
+
+    web = subparsers.add_parser("web", help="Open the hosted graphical workbench.")
     web.add_argument("--print-only", action="store_true", help="Print the workbench URL without opening a browser.")
 
     subparsers.add_parser("interactive", help="Open the semi-graphical terminal menu.")
@@ -1588,6 +1637,21 @@ def validate_cli(args: argparse.Namespace) -> None:
     limit = getattr(args, "limit", None)
     if limit is not None and limit < 0:
         raise ToolkitError("--limit must be zero or greater.")
+    max_pages = getattr(args, "max_pages", None)
+    if max_pages is not None and not 1 <= max_pages <= 10000:
+        raise ToolkitError("--max-pages must be between 1 and 10,000.")
+    max_depth = getattr(args, "max_depth", None)
+    if max_depth is not None and not 0 <= max_depth <= 50:
+        raise ToolkitError("--max-depth must be between 0 and 50.")
+    delay_ms = getattr(args, "delay_ms", None)
+    if delay_ms is not None and not 0 <= delay_ms <= 60000:
+        raise ToolkitError("--delay-ms must be between 0 and 60,000.")
+    port = getattr(args, "port", None)
+    if port is not None and not 0 <= port <= 65535:
+        raise ToolkitError("--port must be between 0 and 65,535.")
+    api_max_pages = getattr(args, "api_max_pages", None)
+    if api_max_pages is not None and not 1 <= api_max_pages <= 10000:
+        raise ToolkitError("--api-max-pages must be between 1 and 10,000.")
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -1602,6 +1666,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     command = args.command or "interactive"
     if command == "interactive":
         return interactive_loop(console, args.profile_file)
+    if command in {"links", "serve"}:
+        from seo_index_site import run_links, serve_workbench
+        return run_links(args, console) if command == "links" else serve_workbench(args, console)
     if command == "web":
         print(WORKBENCH_URL)
         if not args.print_only:

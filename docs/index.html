@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="description" content="SEO-INDEX VariScripts graphical workbench for technical SEO, GEO, AEO, redirects, crawler access, structured data, sitemaps, and IndexNow.">
+  <meta name="description" content="SEO-INDEX VariScripts graphical workbench for technical SEO, GEO, AEO, internal-link intelligence, redirects, crawler access, structured data, sitemaps, and IndexNow.">
   <meta name="theme-color" content="#0d0916">
   <meta name="color-scheme" content="dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <link rel="canonical" href="https://webtools.mellozone.site/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SEO-INDEX VariScripts Workbench">
@@ -40,6 +40,7 @@
       <nav class="side-nav">
         <a href="#overview"><span>⌂</span> Overview</a>
         <a href="#tools"><span>▦</span> Tool catalog</a>
+        <a href="#live"><span>⌬</span> Live site graph</a>
         <a href="#builder"><span>⌘</span> CLI builder</a>
         <a href="#matrix"><span>◉</span> Score matrix</a>
         <a href="#reports"><span>▤</span> Report viewer</a>
@@ -47,7 +48,7 @@
       </nav>
       <div class="sidebar-note">
         <strong>Local-first</strong>
-        <p>The browser analyzes pasted evidence and local reports. Live remote audits stay in the CLI to avoid CORS gaps and leaking audit data.</p>
+        <p>The browser analyzes pasted evidence and local reports. The hosted page stays static. Run <code>seo-index serve</code> to unlock token-protected live audits on localhost.</p>
       </div>
       <div class="dev-card">
         <span class="dev-dot"></span>
@@ -60,10 +61,10 @@
         <div class="hero-copy">
           <p class="eyebrow">Search intelligence control deck</p>
           <h1>Search signals,<br><span>untangled.</span></h1>
-          <p class="lede">One organized workbench for technical SEO, GEO, AEO, IndexNow, crawler access, redirects, hreflang, structured data, and evidence-aware readiness scoring.</p>
+          <p class="lede">One organized workbench for technical SEO, GEO, AEO, internal-link intelligence, IndexNow, crawler access, redirects, hreflang, structured data, and evidence-aware readiness scoring.</p>
           <div class="hero-actions">
-            <a class="button primary" href="#builder">Build a command</a>
-            <a class="button" href="#tools">Browse tools</a>
+            <a class="button primary" href="#live">Map a site</a>
+            <a class="button" href="#builder">Build a command</a>
           </div>
         </div>
         <div class="terminal-card" aria-label="Example terminal output">
@@ -72,21 +73,22 @@
 <span class="purple">   ( o.o )   ~~~~)</span>
 <span class="purple">    &gt; ^ &lt;</span>
 
-<span class="cyan">SEO-INDEX VariScripts</span>
-<span class="dim">category scorecards enabled</span>
+<span class="cyan">SEO-INDEX VariScripts v1.3.0</span>
+<span class="dim">site intelligence enabled</span>
 
 <span class="green">PASS</span> crawl eligibility
 <span class="green">PASS</span> canonical integrity
-<span class="yellow">WARN</span> entity sameAs missing
-<span class="green">PASS</span> answer structure
+<span class="green">PASS</span> sitemap inventory
+<span class="yellow">WARN</span> 3 orphan candidates
+<span class="green">PASS</span> redirect hygiene
 
-Assured score  <span class="green">84/100</span>
-Evidence       91%</code></pre>
+Pages mapped   <span class="green">148</span>
+Internal edges <span class="cyan">1,204</span></code></pre>
         </div>
       </section>
 
       <section class="overview-grid" aria-label="Workbench capabilities">
-        <article class="metric-card"><span>10</span><strong>Focused tools</strong><p>Distinct lanes without duplicate wrappers.</p></article>
+        <article class="metric-card"><span>12</span><strong>Focused tools</strong><p>Distinct lanes without duplicate wrappers.</p></article>
         <article class="metric-card"><span>5</span><strong>Score profiles</strong><p>Google, Bing, generic, GEO, and AEO.</p></article>
         <article class="metric-card"><span>3</span><strong>Operating systems</strong><p>Windows, macOS, and Linux launchers.</p></article>
         <article class="metric-card"><span>0</span><strong>Browser uploads</strong><p>Reports stay on the device.</p></article>
@@ -105,6 +107,38 @@ Evidence       91%</code></pre>
           <button class="chip" data-filter="indexing">Indexing</button>
         </div>
         <div id="tool-grid" class="tool-grid"></div>
+      </section>
+
+
+      <section id="live" class="section-block live-section">
+        <div class="section-heading">
+          <div><p class="eyebrow">Local live mode</p><h2>Map the site, not just one page</h2></div>
+          <p>Start <code>seo-index serve</code>, then crawl one host into an interactive internal-link graph with depth, orphan, redirect, dead-end, noindex, and canonical findings.</p>
+        </div>
+        <div class="live-mode-banner panel">
+          <div><span id="local-api-dot" class="connection-dot"></span><strong id="local-api-label">Checking local API</strong><p id="local-api-copy">The hosted workbench is read-only. Local mode keeps live requests on your machine.</p></div>
+          <code>seo-index serve</code>
+        </div>
+        <div class="live-grid">
+          <form id="live-links-form" class="panel live-form">
+            <label class="wide">Start URL<input id="live-url" type="url" inputmode="url" placeholder="https://example.com/"></label>
+            <label class="wide">Sitemap URL <span class="optional">optional</span><input id="live-sitemap" type="url" inputmode="url" placeholder="https://example.com/sitemap.xml"></label>
+            <label>Maximum pages<input id="live-max-pages" type="number" min="1" max="500" value="100"></label>
+            <label>Maximum depth<input id="live-max-depth" type="number" min="0" max="20" value="5"></label>
+            <label>Request delay (ms)<input id="live-delay" type="number" min="0" max="5000" value="75"></label>
+            <label>Robots user-agent<select id="live-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>SEO-INDEX-VariScripts</option></select></label>
+            <label class="check"><input id="live-subdomains" type="checkbox"> Include subdomains</label>
+            <label class="check"><input id="live-drop-query" type="checkbox"> Collapse query variants</label>
+            <button id="run-live-links" class="button primary wide" type="submit">Run Internal Link Graph</button>
+            <p id="live-run-note" class="form-note wide">Live crawling is available only from the localhost workbench opened by <code>seo-index serve</code>.</p>
+          </form>
+          <div class="panel live-output">
+            <div class="panel-head"><span>Relationship graph</span><div class="graph-actions"><button id="fit-live-graph" class="button small" type="button">Fit</button><button id="toggle-live-labels" class="button small" type="button">Labels</button></div></div>
+            <canvas id="live-graph" aria-label="Internal link graph visualization"></canvas>
+            <div id="live-summary" class="live-summary"><p>Start local mode and run a crawl to see the site constellation.</p></div>
+          </div>
+        </div>
+        <div id="live-findings" class="live-findings"></div>
       </section>
 
       <section id="builder" class="section-block split-section">

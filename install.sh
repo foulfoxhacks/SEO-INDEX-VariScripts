@@ -27,7 +27,7 @@ SOURCE=$(find "$EXTRACT" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 cp -R "$SOURCE"/. "$INSTALL_DIR"/
-for required in   "Py+Linux/Scripts/seo_index_toolkit.py"   "Py+Linux/Scripts/seo_index_extensions.py"   "Config/engine_profiles.json"; do
+for required in   "Py+Linux/Scripts/seo_index_toolkit.py"   "Py+Linux/Scripts/seo_index_extensions.py"   "Py+Linux/Scripts/seo_index_site.py"   "docs/index.html"   "Config/engine_profiles.json"; do
   [ -f "$INSTALL_DIR/$required" ] || { echo "Installation is incomplete; missing $required" >&2; exit 1; }
 done
 chmod +x "$INSTALL_DIR/Py+Linux/Scripts/"*.sh "$INSTALL_DIR/MacOS/"*.command 2>/dev/null || true

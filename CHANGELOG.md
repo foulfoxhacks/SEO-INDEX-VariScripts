@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.0 - 2026-07-29
+
+### Added
+
+- Internal Link Graph same-site crawler with depth, incoming/outgoing edges, dead ends, redirects, broken pages, sitemap orphan candidates, generic anchors, noindex pages, canonical drift, duplicate titles, and PageRank-style importance
+- standalone interactive HTML relationship reports plus JSON schema v3 reports
+- `seo-index serve` localhost workbench with a token-protected live audit API
+- local live-mode dashboard and graph canvas in the web workbench
+- Windows, Linux, and macOS launchers for the graph and local server
+- nine-test deterministic fixture suite
+- `.gitattributes` line-ending policy for cross-platform launchers
+
+### Changed
+
+- hosted workbench URL now targets `https://webtools.mellozone.site/`
+- workbench tool catalog and command builder now include site intelligence and local live mode
+- installer validation now checks the site-intelligence module and workbench assets
+- graphical workbench Content Security Policy remains HTTPS-safe while allowing same-origin localhost API calls
+
+### Security
+
+- local server binds to loopback by default
+- live API requires a random session token and same-origin requests
+- private, loopback, link-local, and reserved audit targets are blocked unless explicitly enabled
+- browser API page limits, request-size limits, response-size limits, timeouts, and single-crawl locking are enforced
+
 ## 1.2.0 - 2026-07-29
 
 ### Added
