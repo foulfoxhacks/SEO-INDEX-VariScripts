@@ -7,13 +7,45 @@ A dependency-light, cross-platform indexing, technical SEO, GEO, and AEO diagnos
          ( o.o )     ~~~~)
           > ^ <
 ╭──────────────────────────────────────────────────────────╮
-│              SEO-INDEX VariScripts v1.2.0                │
+│              SEO-INDEX VariScripts v1.3.0                │
 │ foulfoxhacks  •  aka The Dev Sammy                       │
 │ Search signals, untangled.                               │
 ╰──────────────────────────────────────────────────────────╯
 ```
 
-## What v1.2 adds
+## What v1.3 adds
+
+### Internal Link Graph
+
+`seo-index links` crawls one canonical host and produces a site-level relationship report rather than another single-page checklist. It includes:
+
+- internal and external edge inventory
+- click depth and dead-end detection
+- sitemap-to-crawl orphan candidates
+- discovered pages missing from the sitemap
+- broken pages and links to redirects
+- `noindex` and canonical mismatch findings
+- generic anchor-text findings
+- duplicate title clusters
+- a lightweight PageRank-style internal importance score
+- JSON evidence and a standalone interactive HTML graph
+- robots.txt compliance, request delays, page/depth caps, and optional query collapsing
+
+### Local graphical workbench
+
+`seo-index serve` opens the same workbench from `127.0.0.1` and enables a token-protected live audit API. The hosted GitHub Pages copy remains static; localhost mode can run Internal Link Graph without a cloud proxy.
+
+Safety defaults:
+
+- loopback-only binding
+- random session token
+- same-origin API checks
+- one crawl at a time
+- response and request size limits
+- private, loopback, link-local, and reserved audit targets blocked unless explicitly enabled
+- configurable API page ceiling
+
+## What v1.2 added
 
 The toolkit is now organized by diagnostic category instead of cloning the same check into several differently named scripts.
 
@@ -61,7 +93,7 @@ The `docs/` directory contains a responsive static GitHub Pages interface with:
 - Redirect Lab JSON visualizer
 - animated fox-tail branding
 
-The static page does not proxy arbitrary websites. Browsers normally prevent cross-origin inspection, so live network audits remain in the local CLI. The page analyzes pasted evidence and CLI-generated JSON entirely in the browser.
+The hosted page does not proxy arbitrary websites. It analyzes pasted evidence and CLI-generated JSON in the browser. Run `seo-index serve` to open a localhost copy that can call the local live-audit API without mixed-content or CORS detours.
 
 ## Important score disclaimer
 
@@ -163,8 +195,10 @@ Menu:
   8. Structured Data Graph
   9. GEO / Entity Discoverability
  10. AEO / Answer Extractability
- 11. List scoring profiles
- 12. Open graphical workbench
+ 11. Internal Link Graph
+ 12. Start local graphical workbench
+ 13. List scoring profiles
+ 14. Open hosted graphical workbench
 ```
 
 ## Core commands
@@ -189,6 +223,52 @@ seo-index score --url 'https://example.com' --engine bing --key-location 'https:
 seo-index score --url 'https://example.com' --engine geo
 seo-index score --url 'https://example.com/faq' --engine aeo
 ```
+
+### Internal Link Graph
+
+```bash
+seo-index links \
+  --url 'https://example.com/' \
+  --sitemap 'https://example.com/sitemap.xml' \
+  --max-pages 500 \
+  --max-depth 7 \
+  --json './reports/internal-links.json' \
+  --html './reports/internal-links.html'
+```
+
+Windows endpoint:
+
+```powershell
+.\Win\Test-InternalLinkGraph.ps1 `
+  -Url 'https://example.com/' `
+  -Sitemap 'https://example.com/sitemap.xml' `
+  -Json '.\reports\internal-links.json' `
+  -Html '.\reports\internal-links.html'
+```
+
+The crawler respects `robots.txt` by default and stays on the selected host. Use `--include-subdomains`, `--drop-query`, or `--follow-nofollow` only when those choices match the intended audit scope.
+
+### Local live workbench
+
+```bash
+seo-index serve
+```
+
+The command opens a tokenized localhost URL, usually:
+
+```text
+http://127.0.0.1:8765/?token=...
+```
+
+Useful options:
+
+```bash
+seo-index serve --port 9000 --api-max-pages 1000
+seo-index serve --no-open
+seo-index serve --allow-private-targets
+```
+
+`--allow-private-targets` is intentionally opt-in for local development sites and intranet audits.
 
 ### Redirect Lab
 
@@ -309,11 +389,13 @@ MacOS/aeo-audit.command
 4. Set **Source** to **GitHub Actions**.
 5. Run the workflow manually or push a change under `docs/`.
 
-The expected project-site address is:
+The configured custom-domain address is:
 
 ```text
-https://foulfoxhacks.github.io/SEO-INDEX-VariScripts/
+https://webtools.mellozone.site/
 ```
+
+GitHub's project-site fallback is `https://foulfoxhacks.github.io/SEO-INDEX-VariScripts/`. The custom hostname must resolve by CNAME to `foulfoxhacks.github.io` before GitHub can provision HTTPS.
 
 The workflow deploys only `docs/`, not the installer or source tree.
 
@@ -348,12 +430,21 @@ SEO-INDEX-VariScripts/
 │   ├── SCORING-METHODOLOGY.md
 │   └── assets/
 ├── MacOS/
+│   ├── internal-link-graph.command
+│   ├── serve-workbench.command
+│   └── ...
 ├── Py+Linux/Scripts/
 │   ├── seo_index_toolkit.py
 │   ├── seo_index_extensions.py
+│   ├── seo_index_site.py
+│   ├── internal-link-graph.sh
+│   ├── serve-workbench.sh
 │   └── ...
 ├── Tests/test_toolkit.py
 ├── Win/
+│   ├── Test-InternalLinkGraph.ps1
+│   ├── Start-SEOIndexServer.ps1
+│   └── ...
 ├── install.ps1
 ├── install.sh
 ├── seo-index
@@ -364,7 +455,7 @@ SEO-INDEX-VariScripts/
 
 ```bash
 python3 -m py_compile './Py+Linux/Scripts/'*.py
-python3 ./Tests/test_toolkit.py
+python3 ./Tests/test_toolkit.py  # 9 deterministic tests
 bash -n ./Py+Linux/Scripts/*.sh ./MacOS/*.command ./install.sh ./seo-index
 ```
 

@@ -26,6 +26,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Validate workbench assets
+        run: |
+          test -f docs/index.html
+          test -f docs/style.css
+          test -f docs/assets/app.js
+          test -f docs/matrix.json
+          node --check docs/assets/app.js
+          python -m json.tool docs/matrix.json >/dev/null
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

@@ -48,6 +48,8 @@ try {
         'Win\Start-SEOIndexToolkit.ps1',
         'Py+Linux\Scripts\seo_index_toolkit.py',
         'Py+Linux\Scripts\seo_index_extensions.py',
+        'Py+Linux\Scripts\seo_index_site.py',
+        'docs\index.html',
         'Config\engine_profiles.json'
     )
     foreach ($relative in $required) {
