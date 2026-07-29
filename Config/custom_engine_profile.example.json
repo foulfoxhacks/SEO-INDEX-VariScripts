@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "custom": {
+      "label": "Custom Search Engine Readiness",
+      "crawler": "ExampleBot",
+      "description": "Example profile. Replace the crawler, description, and weights only after reviewing the engine's current official documentation.",
+      "weights": {
+        "status_200": 20,
+        "robots_allowed": 15,
+        "no_noindex": 15,
+        "canonical_consistent": 12,
+        "indexable_text": 10,
+        "sitemap_inclusion": 8,
+        "https": 5,
+        "mobile_viewport": 3,
+        "title": 4,
+        "meta_description": 2,
+        "h1": 2,
+        "structured_data": 2,
+        "lastmod_present": 2
+      },
+      "critical": ["status_200", "robots_allowed", "no_noindex"]
+    }
+  }
+}
