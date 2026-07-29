@@ -1,71 +1,126 @@
 # SEO-INDEX VariScripts
 
-A dependency-light, cross-platform indexing and technical SEO toolkit for Windows, macOS, and Linux.
-
-It combines the original sitemap-to-IndexNow runners with a semi-graphical terminal interface, engine-specific index-readiness scoring, canonical auditing, sitemap diagnostics, JSON/Markdown reports, and one-command installers.
+A dependency-light, cross-platform indexing, technical SEO, GEO, and AEO diagnostic toolkit for Windows, macOS, Linux, CI, and GitHub Pages.
 
 ```text
           /\_/\
          ( o.o )     ~~~~)
           > ^ <
 ╭──────────────────────────────────────────────────────────╮
-│              SEO-INDEX VariScripts v1.1.0                │
+│              SEO-INDEX VariScripts v1.2.0                │
 │ foulfoxhacks  •  aka The Dev Sammy                       │
 │ Search signals, untangled.                               │
 ╰──────────────────────────────────────────────────────────╯
 ```
 
+## What v1.2 adds
+
+The toolkit is now organized by diagnostic category instead of cloning the same check into several differently named scripts.
+
+### Technical SEO
+
+- **Redirect Lab**: complete redirect chain, loops, hop count, permanent versus temporary status, host transitions, HTTPS downgrades, and final status
+- **Crawler Access Matrix**: Googlebot, bingbot, OAI-SearchBot, ClaudeBot, PerplexityBot, GPTBot, or custom user agents
+- **Hreflang Auditor**: syntax, duplicates, self-reference, alternate status, and reciprocal declarations
+- **Structured Data Graph**: JSON-LD syntax, Schema.org types, contexts, duplicate `@id`, and `sameAs`
+- Existing Canonical Guard, Sitemap Doctor, indexability scoring, and IndexNow submission remain intact
+
+### GEO diagnostics
+
+- AI-search crawler access
+- Organization, Person, and WebSite entity signals
+- `sameAs` identity connections
+- About, Contact, Team, Staff, and editorial pathways
+- authorship and review signals
+- publication, modification, and review dates
+- source-labelled outbound references
+- machine-readable page identity
+- optional `llms.txt` visibility, clearly marked experimental
+
+### AEO diagnostics
+
+- question-oriented headings
+- concise paragraph-sized answer blocks
+- lists and tables
+- FAQPage and QAPage schema
+- speakable markup
+- authorship, sources, and freshness
+- semantic heading hierarchy
+- answer-source eligibility
+
+### Graphical workbench
+
+The `docs/` directory contains a responsive static GitHub Pages interface with:
+
+- category-filtered tool catalog
+- Windows, Linux, and macOS command builder
+- score-matrix explorer
+- local JSON report viewer
+- pasted HTML and response-header analyzer
+- pasted robots.txt evaluator
+- Redirect Lab JSON visualizer
+- animated fox-tail branding
+
+The static page does not proxy arbitrary websites. Browsers normally prevent cross-origin inspection, so live network audits remain in the local CLI. The page analyzes pasted evidence and CLI-generated JSON entirely in the browser.
+
 ## Important score disclaimer
 
-The Google, Bing, and general scores are **transparent diagnostic readiness scores**, not official scores issued by a search engine. They do not predict ranking and do not guarantee crawling or indexing.
+Google, Bing, general-search, GEO, and AEO scores are **transparent diagnostic readiness scores**. They are not issued by a search engine or answer engine, do not predict ranking or citation, and do not guarantee crawling or indexing.
 
-The tool reports each check, its profile weight, the points earned, and how much of the profile was actually verified. A critical failure such as a non-200 page, a crawler block, or `noindex` caps the result below 50.
+## Scoring matrix v2
 
-## Toolkit features
+The old flat matrix has been replaced by category scorecards.
 
-- Semi-graphical interactive terminal menu
-- Animated fox-tail splash, automatically static in non-interactive terminals
-- Google-specific, Bing-specific, and general index-readiness profiles
-- Canonical Guard for redirects, final URLs, hosts, and `rel=canonical`
-- Sitemap Doctor for XML, sitemap indexes, GZip, duplicates, hosts, fragments, `lastmod`, status codes, and redirects
-- Page indexability checks for HTTP status, robots.txt, robots meta, `X-Robots-Tag`, canonical, crawlable text, title, description, H1, viewport, and JSON-LD
-- Existing IndexNow submission runner available through the unified CLI
-- JSON and Markdown reports
-- Scriptable exit codes for CI
-- PowerShell, shell, macOS `.command`, Python, and installed `seo-index` entry points
-- No third-party Python packages required
+Every profile defines:
+
+1. categories totaling 100 points
+2. factors totaling 100 percent within each category
+3. critical eligibility checks
+4. a crawler identity appropriate to the profile
+
+The report shows three distinct values:
+
+- **Verified score**: performance on checks the tool could actually verify
+- **Evidence coverage**: how much of the 100-point profile was verified
+- **Assured score**: `verified score × sqrt(evidence coverage)`
+
+The assurance adjustment prevents a 95/100 result based on only a handful of available checks. Unknown checks do not count as failures, but they lower evidence coverage and therefore lower the assured score. A critical failure such as an unsuccessful page, blocked crawler, `noindex`, or non-indexable content type caps the result below 50.
+
+Detailed methodology: [`docs/SCORING-METHODOLOGY.md`](docs/SCORING-METHODOLOGY.md)
+
+Bundled profiles:
+
+| Profile | Type | Primary emphasis |
+|---|---|---|
+| `google` | search engine | eligibility, canonical integrity, content, discovery, structured data |
+| `bing` | search engine | eligibility plus stronger sitemap, freshness, and IndexNow coverage |
+| `generic` | search-neutral | portable crawl and index readiness |
+| `geo` | readiness lens | AI-search access, entity clarity, sources, freshness, machine readability |
+| `aeo` | readiness lens | answer structure, semantic answer markup, trust, freshness, extractability |
 
 ## Installation
 
-### Windows one-liner
-
-PowerShell users can install directly from the public repository:
+### Windows
 
 ```powershell
 irm https://raw.githubusercontent.com/foulfoxhacks/SEO-INDEX-VariScripts/main/install.ps1 | iex
 ```
 
-Because `iex` executes downloaded code immediately, a review-first installation is safer:
+The installer now validates the required Python core and extension files before reporting success. The Windows launcher searches PATH and common per-user Python installation directories, avoiding the Microsoft Store placeholder aliases.
+
+Review-first installation:
 
 ```powershell
 irm https://raw.githubusercontent.com/foulfoxhacks/SEO-INDEX-VariScripts/main/install.ps1 -OutFile install.ps1
 Get-Content .\install.ps1
-.\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Open a new terminal after installation, then run:
-
-```powershell
-seo-index
-```
-
-### macOS and Linux one-liner
+### macOS and Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/foulfoxhacks/SEO-INDEX-VariScripts/main/install.sh | sh
 ```
-
-The installer creates `~/.local/bin/seo-index`. Add that directory to `PATH` if your shell does not already include it.
 
 ### Run without installing
 
@@ -86,241 +141,248 @@ Linux:
 
 ```bash
 chmod +x './Py+Linux/Scripts/seo-index-toolkit.sh'
-./Py+Linux/Scripts/seo-index-toolkit.sh
+'./Py+Linux/Scripts/seo-index-toolkit.sh'
 ```
 
-Python:
+## Interactive terminal
 
 ```bash
-python3 './Py+Linux/Scripts/seo_index_toolkit.py'
+seo-index
 ```
 
-Running without a subcommand opens the interactive menu. From the repository root you may also use `./seo-index` on macOS/Linux or `seo-index.cmd` on Windows.
+Menu:
 
-## Engine-specific index-readiness score
-
-### All profiles
-
-```bash
-seo-index score \
-  --url 'https://example.com/about' \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --key-location 'https://example.com/indexnow-key.txt' \
-  --engine all
+```text
+  1. Index readiness score
+  2. Canonical Guard
+  3. Sitemap Doctor
+  4. IndexNow submission runner
+  5. Redirect Lab
+  6. Crawler Access Matrix
+  7. Hreflang Auditor
+  8. Structured Data Graph
+  9. GEO / Entity Discoverability
+ 10. AEO / Answer Extractability
+ 11. List scoring profiles
+ 12. Open graphical workbench
 ```
 
-### Google profile
+## Core commands
 
-```bash
-seo-index score \
-  --url 'https://example.com/about' \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --engine google
-```
-
-The Google profile emphasizes the published minimum technical requirements, crawler access, index directives, canonical consistency, indexable content, sitemap inclusion, HTTPS, mobile viewport metadata, titles, descriptions, headings, structured data, and sitemap freshness.
-
-Google is not scored on IndexNow readiness.
-
-### Bing profile
+### Category scorecards
 
 ```bash
 seo-index score \
   --url 'https://example.com/about' \
   --sitemap 'https://example.com/sitemap.xml' \
   --key-location 'https://example.com/indexnow-key.txt' \
-  --engine bing
-```
-
-The Bing profile gives additional weight to sitemap discovery, accurate freshness signals, and IndexNow readiness.
-
-### Reports and CI threshold
-
-```bash
-seo-index score \
-  --url 'https://example.com/about' \
   --engine all \
   --json './reports/about.json' \
-  --markdown './reports/about.md' \
+  --markdown './reports/about.md'
+```
+
+Focused profiles:
+
+```bash
+seo-index score --url 'https://example.com' --engine google
+seo-index score --url 'https://example.com' --engine bing --key-location 'https://example.com/key.txt'
+seo-index score --url 'https://example.com' --engine geo
+seo-index score --url 'https://example.com/faq' --engine aeo
+```
+
+### Redirect Lab
+
+```bash
+seo-index redirect \
+  --url 'http://example.com/old-page' \
+  --max-hops 10 \
+  --json './reports/redirect.json'
+```
+
+Windows script endpoint:
+
+```powershell
+.\Win\Test-RedirectChain.ps1 -Url 'http://example.com/old-page' -Json '.\reports\redirect.json'
+```
+
+### Crawler Access Matrix
+
+```bash
+seo-index robots --url 'https://example.com/page'
+```
+
+Custom agents:
+
+```bash
+seo-index robots \
+  --url 'https://example.com/page' \
+  --agent Googlebot \
+  --agent OAI-SearchBot \
+  --agent ClaudeBot
+```
+
+### Hreflang Auditor
+
+```bash
+seo-index hreflang \
+  --url 'https://example.com/en/' \
+  --check-alternates \
+  --limit 30 \
+  --json './reports/hreflang.json'
+```
+
+### Structured Data Graph
+
+```bash
+seo-index schema --url 'https://example.com/about'
+seo-index schema --url 'https://example.com/about' --show-json
+```
+
+### GEO focused audit
+
+```bash
+seo-index geo \
+  --url 'https://example.com/about' \
+  --json './reports/geo.json'
+```
+
+### AEO focused audit
+
+```bash
+seo-index aeo \
+  --url 'https://example.com/faq' \
+  --json './reports/aeo.json'
+```
+
+### Open the graphical workbench
+
+```bash
+seo-index web
+seo-index web --print-only
+```
+
+### Existing tools
+
+```bash
+seo-index canonical --sitemap 'https://example.com/sitemap.xml' --expected-host example.com
+seo-index sitemap --sitemap 'https://example.com/sitemap.xml' --check-pages 100
+seo-index indexnow --sitemap 'https://example.com/sitemap.xml' --key-location 'https://example.com/key.txt' --dry-run
+```
+
+## Direct script endpoints
+
+Windows:
+
+```text
+Win/Test-RedirectChain.ps1
+Win/Test-CrawlerAccess.ps1
+Win/Test-Hreflang.ps1
+Win/Test-StructuredData.ps1
+Win/Test-GEOReadiness.ps1
+Win/Test-AEOReadiness.ps1
+```
+
+Linux/macOS shell endpoints:
+
+```text
+Py+Linux/Scripts/redirect-audit.sh
+Py+Linux/Scripts/robots-audit.sh
+Py+Linux/Scripts/hreflang-audit.sh
+Py+Linux/Scripts/schema-audit.sh
+Py+Linux/Scripts/geo-audit.sh
+Py+Linux/Scripts/aeo-audit.sh
+```
+
+macOS clickable launchers:
+
+```text
+MacOS/redirect-lab.command
+MacOS/geo-audit.command
+MacOS/aeo-audit.command
+```
+
+## Publish the graphical workbench
+
+1. Push the `docs/` directory and `.github/workflows/pages.yml` to `main`.
+2. Open the repository on GitHub.
+3. Go to **Settings → Pages**.
+4. Set **Source** to **GitHub Actions**.
+5. Run the workflow manually or push a change under `docs/`.
+
+The expected project-site address is:
+
+```text
+https://foulfoxhacks.github.io/SEO-INDEX-VariScripts/
+```
+
+The workflow deploys only `docs/`, not the installer or source tree.
+
+## Reports and CI
+
+```bash
+seo-index score \
+  --url 'https://example.com' \
+  --engine google \
+  --json './reports/google.json' \
   --fail-below 75
 ```
 
 Exit codes:
 
 - `0`: completed and met the requested threshold
-- `1`: validation, parsing, or network setup error
-- `2`: audit completed but failed a requested threshold or found critical audit issues
+- `1`: validation, parsing, setup, or network error
+- `2`: audit completed but found critical issues or failed the requested threshold
 - `130`: cancelled
-
-## Canonical Guard
-
-Audit sitemap URLs for redirect and canonical-host disagreements:
-
-```bash
-seo-index canonical \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --expected-host 'example.com' \
-  --limit 200 \
-  --workers 8 \
-  --json './reports/canonical.json'
-```
-
-Set `--limit 0` to check every URL.
-
-PowerShell script endpoint:
-
-```powershell
-.\Win\Test-CanonicalSignals.ps1 `
-  -Sitemap 'https://example.com/sitemap.xml' `
-  -ExpectedHost 'example.com' `
-  -Limit 200
-```
-
-## Sitemap Doctor
-
-Validate structure and optionally request sitemap URLs:
-
-```bash
-seo-index sitemap \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --check-pages 100 \
-  --workers 8 \
-  --json './reports/sitemap.json'
-```
-
-PowerShell script endpoint:
-
-```powershell
-.\Win\Test-SitemapHealth.ps1 `
-  -Sitemap 'https://example.com/sitemap.xml' `
-  -CheckPages 100
-```
-
-## Direct scoring scripts
-
-Windows:
-
-```powershell
-.\Win\Get-IndexReadinessScore.ps1 `
-  -Url 'https://example.com/about' `
-  -Engine all `
-  -Sitemap 'https://example.com/sitemap.xml' `
-  -KeyLocation 'https://example.com/indexnow-key.txt'
-```
-
-Linux/macOS shell endpoints:
-
-```bash
-'./Py+Linux/Scripts/index-readiness-score.sh' --url 'https://example.com/about' --engine all
-'./Py+Linux/Scripts/canonical-guard.sh' --sitemap 'https://example.com/sitemap.xml'
-'./Py+Linux/Scripts/sitemap-doctor.sh' --sitemap 'https://example.com/sitemap.xml'
-```
-
-## IndexNow through the unified CLI
-
-Dry run:
-
-```bash
-seo-index indexnow \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --key-location 'https://example.com/indexnow-key.txt' \
-  --dry-run
-```
-
-Live submission:
-
-```bash
-seo-index indexnow \
-  --sitemap 'https://example.com/sitemap.xml' \
-  --key-location 'https://example.com/indexnow-key.txt'
-```
-
-The original standalone runners remain available:
-
-- `Win/Submit-IndexNow.ps1`
-- `Py+Linux/Scripts/indexnow_runner.py`
-- `Py+Linux/Scripts/submit-indexnow-linux.sh`
-- `MacOS/submit-indexnow-macos.command`
-
-## Splash controls
-
-```bash
-seo-index --no-animation score --url 'https://example.com' --engine google
-seo-index --no-splash score --url 'https://example.com' --engine google
-seo-index --no-color score --url 'https://example.com' --engine google
-```
-
-`NO_COLOR=1` also disables ANSI colors.
-
-## Custom search-engine profiles
-
-Profiles live in `Config/engine_profiles.json`. Each profile defines:
-
-- Display label
-- Crawler user-agent
-- Factor weights totaling 100
-- Critical checks that can cap the score
-
-Load another profile file with:
-
-```bash
-seo-index --profile-file './Config/my_profiles.json' list-engines
-```
-
-Only Google, Bing, and general profiles are bundled initially. Additional engines should be added only after their current official documentation is reviewed.
 
 ## Repository layout
 
 ```text
 SEO-INDEX-VariScripts/
+├── .github/workflows/pages.yml
 ├── Config/
 │   ├── engine_profiles.json
 │   └── custom_engine_profile.example.json
+├── docs/
+│   ├── index.html
+│   ├── matrix.json
+│   ├── SCORING-METHODOLOGY.md
+│   └── assets/
 ├── MacOS/
-│   ├── seo-index-toolkit.command
-│   └── submit-indexnow-macos.command
 ├── Py+Linux/Scripts/
 │   ├── seo_index_toolkit.py
-│   ├── seo-index-toolkit.sh
-│   ├── index-readiness-score.sh
-│   ├── canonical-guard.sh
-│   ├── sitemap-doctor.sh
-│   ├── indexnow_runner.py
-│   └── submit-indexnow-linux.sh
-├── Tests/
-│   └── test_toolkit.py
+│   ├── seo_index_extensions.py
+│   └── ...
+├── Tests/test_toolkit.py
 ├── Win/
-│   ├── Start-SEOIndexToolkit.ps1
-│   ├── Get-IndexReadinessScore.ps1
-│   ├── Test-CanonicalSignals.ps1
-│   ├── Test-SitemapHealth.ps1
-│   └── Submit-IndexNow.ps1
-├── seo-index
-├── seo-index.cmd
 ├── install.ps1
 ├── install.sh
-├── CHANGELOG.md
-├── LICENSE
-└── README.md
+├── seo-index
+└── seo-index.cmd
 ```
 
 ## Tests
 
 ```bash
+python3 -m py_compile './Py+Linux/Scripts/'*.py
 python3 ./Tests/test_toolkit.py
-python3 -m py_compile './Py+Linux/Scripts/seo_index_toolkit.py'
+bash -n ./Py+Linux/Scripts/*.sh ./MacOS/*.command ./install.sh ./seo-index
 ```
 
 ## Official references
 
-- Google Search Essentials and technical requirements: https://developers.google.com/search/docs/essentials
+- Google Search technical requirements: https://developers.google.com/search/docs/essentials/technical
 - Google canonicalization: https://developers.google.com/search/docs/crawling-indexing/canonicalization
 - Google robots metadata: https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag
 - Google sitemaps: https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview
-- Bing Webmaster Guidelines: https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a
-- Bing robots metadata: https://www.bing.com/webmasters/help/robots-meta-tags-and-attributes-that-bing-supports-5198d240
-- IndexNow documentation: https://www.indexnow.org/documentation
+- Bing Webmaster guidance: https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a
+- Bing sitemaps: https://www.bing.com/webmasters/help/sitemaps-3b5cf6ed
+- IndexNow: https://www.indexnow.org/documentation
+- OpenAI publisher crawler guidance: https://help.openai.com/en/articles/12627856-publishers-and-developers-faq
+- Anthropic crawler guidance: https://support.anthropic.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler
+- Perplexity crawlers: https://docs.perplexity.ai/docs/resources/perplexity-crawlers
+- Schema.org: https://schema.org/docs/documents.html
+- GitHub Pages custom workflows: https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages
 
 ## License
 
-See `LICENSE`.
+MIT. See `LICENSE`.

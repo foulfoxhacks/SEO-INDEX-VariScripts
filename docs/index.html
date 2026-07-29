@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="SEO-INDEX VariScripts graphical workbench for SEO, GEO, AEO, redirects, crawler access, structured data, sitemaps, and IndexNow.">
+  <meta name="theme-color" content="#100d1d">
+  <link rel="icon" href="assets/fox.svg" type="image/svg+xml">
+  <title>SEO-INDEX VariScripts Workbench</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="SEO-INDEX VariScripts home">
+      <span class="fox" aria-hidden="true"><span class="ear left"></span><span class="ear right"></span><span class="face">•ᴥ•</span><span class="tail"></span></span>
+      <span><strong>SEO-INDEX</strong><small>VariScripts Workbench</small></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#tools">Tools</a><a href="#builder">CLI Builder</a><a href="#matrix">Score Matrix</a><a href="#reports">Reports</a><a href="#lab">Browser Lab</a>
+    </nav>
+    <a class="button ghost" href="https://github.com/foulfoxhacks/SEO-INDEX-VariScripts">GitHub</a>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow">foulfoxhacks · aka The Dev Sammy</p>
+        <h1>Search signals,<br><span>untangled.</span></h1>
+        <p class="lede">A graphical control deck for the same dependency-light SEO, GEO, AEO, IndexNow, redirect, robots, hreflang, and structured-data tools available in the terminal.</p>
+        <div class="hero-actions"><a class="button primary" href="#builder">Build a command</a><a class="button" href="#matrix">Explore scoring</a></div>
+        <p class="micro">Static GitHub Pages frontend. External live audits run through the local CLI because browsers usually block cross-origin inspection.</p>
+      </div>
+      <div class="terminal-card" aria-label="Example command output">
+        <div class="terminal-bar"><i></i><i></i><i></i><span>seo-index</span></div>
+        <pre><code><span class="purple">    /\_/\</span>
+<span class="purple">   ( o.o )   ~~~~)</span>
+<span class="purple">    &gt; ^ &lt;</span>
+
+<span class="cyan">SEO-INDEX VariScripts v1.2.0</span>
+<span class="dim">Category scorecards enabled</span>
+
+<span class="green">PASS</span> crawl eligibility
+<span class="green">PASS</span> canonical integrity
+<span class="yellow">WARN</span> entity sameAs missing
+<span class="green">PASS</span> answer structure
+
+Assured score  <span class="green">84/100</span>
+Evidence       91%</code></pre>
+      </div>
+    </section>
+
+    <section id="tools" class="section shell">
+      <div class="section-heading"><p class="eyebrow">Category-based additions</p><h2>One toolbox, distinct jobs</h2><p>No duplicated wrappers wearing different hats. Each tool owns a separate diagnostic lane.</p></div>
+      <div class="filter-row" role="group" aria-label="Filter tools">
+        <button class="chip active" data-filter="all">All</button><button class="chip" data-filter="seo">Technical SEO</button><button class="chip" data-filter="geo">GEO</button><button class="chip" data-filter="aeo">AEO</button><button class="chip" data-filter="indexing">Indexing</button>
+      </div>
+      <div id="tool-grid" class="tool-grid"></div>
+    </section>
+
+    <section id="builder" class="section shell split-section">
+      <div>
+        <p class="eyebrow">Command builder</p><h2>Compose without syntax confetti</h2>
+        <p>Choose a tool and platform. The workbench generates a copy-ready command for local execution.</p>
+        <form id="command-form" class="panel form-grid">
+          <label>Platform<select id="platform"><option value="powershell">Windows PowerShell</option><option value="bash">Linux / Bash</option><option value="macos">macOS</option></select></label>
+          <label>Tool<select id="tool-select"></select></label>
+          <label class="wide">Page or sitemap URL<input id="target-url" type="url" placeholder="https://example.com/page"></label>
+          <label>Sitemap URL<input id="sitemap-url" type="url" placeholder="https://example.com/sitemap.xml"></label>
+          <label>IndexNow key URL<input id="key-url" type="url" placeholder="https://example.com/key.txt"></label>
+          <label>Scoring profile<select id="profile"><option>all</option><option>google</option><option>bing</option><option>generic</option><option>geo</option><option>aeo</option></select></label>
+          <label>JSON report path<input id="json-path" placeholder="./reports/audit.json"></label>
+        </form>
+      </div>
+      <div class="command-output panel">
+        <div class="panel-head"><span>Generated command</span><button id="copy-command" class="button small" type="button">Copy</button></div>
+        <pre id="command-preview"><code></code></pre>
+        <div id="command-notes" class="notes"></div>
+      </div>
+    </section>
+
+    <section id="matrix" class="section shell">
+      <div class="section-heading"><p class="eyebrow">Scoring matrix v2</p><h2>Category weights you can inspect</h2><p>The score is transparent: category weights, factor weights, verified score, evidence coverage, and an assurance adjustment.</p></div>
+      <div class="matrix-toolbar panel"><label>Profile<select id="matrix-profile"></select></label><div class="formula"><strong>Assured score</strong><span>verified score × √ evidence coverage</span></div></div>
+      <div id="matrix-summary" class="score-summary"></div>
+      <div id="matrix-categories" class="matrix-grid"></div>
+      <p class="disclaimer">These are diagnostic readiness profiles, not scores issued by Google, Bing, OpenAI, Anthropic, Perplexity, or any other engine. They do not predict rankings, citations, crawling, or indexing.</p>
+    </section>
+
+    <section id="reports" class="section shell split-section">
+      <div>
+        <p class="eyebrow">Report viewer</p><h2>Turn CLI JSON into a dashboard</h2><p>Run any command with <code>--json</code>, then open the report here. Processing stays in your browser.</p>
+        <label class="dropzone" id="report-drop"><input id="report-file" type="file" accept="application/json,.json"><strong>Drop a report or choose a JSON file</strong><span>No upload leaves this device.</span></label>
+      </div>
+      <div id="report-view" class="panel report-empty"><p>Your scorecards and findings will appear here.</p></div>
+    </section>
+
+    <section id="lab" class="section shell">
+      <div class="section-heading"><p class="eyebrow">Browser lab</p><h2>Offline inspection for pasted evidence</h2><p>Analyze HTML, response headers, robots.txt, or a Redirect Lab JSON report without a server-side proxy.</p></div>
+      <div class="lab-tabs" role="tablist"><button class="chip active" data-tab="html-lab">HTML & headers</button><button class="chip" data-tab="robots-lab">robots.txt</button><button class="chip" data-tab="redirect-lab">Redirect JSON</button></div>
+      <div id="html-lab" class="lab-panel active">
+        <div class="lab-inputs"><label>Page URL<input id="lab-url" value="https://example.com/page"></label><label>Raw response headers<textarea id="lab-headers" rows="8" placeholder="HTTP/2 200&#10;content-type: text/html&#10;x-robots-tag: index, follow"></textarea></label><label>HTML source<textarea id="lab-html" rows="14" placeholder="Paste the rendered or server HTML here"></textarea></label><button id="analyze-html" class="button primary">Analyze evidence</button></div>
+        <div id="html-results" class="panel results"><p>Paste evidence and run the analyzer.</p></div>
+      </div>
+      <div id="robots-lab" class="lab-panel"><div class="lab-inputs"><label>Target path<input id="robots-path" value="/"></label><label>Crawler<select id="robots-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>ClaudeBot</option><option>PerplexityBot</option><option>GPTBot</option></select></label><label>robots.txt<textarea id="robots-text" rows="16" placeholder="User-agent: *&#10;Allow: /&#10;Sitemap: https://example.com/sitemap.xml"></textarea></label><button id="analyze-robots" class="button primary">Evaluate rules</button></div><div id="robots-results" class="panel results"><p>Paste robots.txt to inspect crawler access and sitemap directives.</p></div></div>
+      <div id="redirect-lab" class="lab-panel"><div class="lab-inputs"><label>Redirect Lab JSON<textarea id="redirect-json" rows="18" placeholder='{"tool":"redirect","report":{"hops":[]}}'></textarea></label><button id="analyze-redirect" class="button primary">Render chain</button></div><div id="redirect-results" class="panel results"><p>Paste JSON produced by <code>seo-index redirect --json report.json</code>.</p></div></div>
+    </section>
+  </main>
+
+  <footer class="shell"><span>SEO-INDEX VariScripts · MIT licensed</span><span>Built by foulfoxhacks / The Dev Sammy 🦊</span></footer>
+  <script src="assets/app.js" defer></script>
+</body>
+</html>

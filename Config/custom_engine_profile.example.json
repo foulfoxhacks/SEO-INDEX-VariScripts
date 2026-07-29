@@ -1,24 +1,44 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "profiles": {
-    "custom": {
-      "label": "Custom Search Engine Readiness",
+    "example": {
+      "profileType": "custom",
+      "label": "Example Custom Readiness",
       "crawler": "ExampleBot",
-      "description": "Example profile. Replace the crawler, description, and weights only after reviewing the engine's current official documentation.",
-      "weights": {
-        "status_200": 20,
-        "robots_allowed": 15,
-        "no_noindex": 15,
-        "canonical_consistent": 12,
-        "indexable_text": 10,
-        "sitemap_inclusion": 8,
-        "https": 5,
-        "mobile_viewport": 3,
-        "title": 4,
-        "meta_description": 2,
-        "h1": 2,
-        "structured_data": 2,
-        "lastmod_present": 2
+      "description": "Copy this file, rename the profile, and adjust category and factor weights. Categories and each category's factors must total 100.",
+      "categories": {
+        "eligibility": {
+          "label": "Eligibility",
+          "weight": 50,
+          "factors": {
+            "status_200": 25,
+            "content_type_indexable": 15,
+            "robots_allowed": 20,
+            "no_noindex": 25,
+            "indexable_text": 15
+          }
+        },
+        "identity": {
+          "label": "Identity and semantics",
+          "weight": 30,
+          "factors": {
+            "canonical_consistent": 25,
+            "structured_data_valid": 25,
+            "schema_entity": 20,
+            "lang_declared": 15,
+            "heading_structure": 15
+          }
+        },
+        "discovery": {
+          "label": "Discovery",
+          "weight": 20,
+          "factors": {
+            "sitemap_inclusion": 35,
+            "sitemap_in_robots": 25,
+            "sitemap_clean": 20,
+            "lastmod_present": 20
+          }
+        }
       },
       "critical": ["status_200", "robots_allowed", "no_noindex"]
     }

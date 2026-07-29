@@ -44,6 +44,19 @@ try {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     Copy-Item -Path (Join-Path $source.FullName '*') -Destination $InstallDir -Recurse -Force
 
+    $required = @(
+        'Win\Start-SEOIndexToolkit.ps1',
+        'Py+Linux\Scripts\seo_index_toolkit.py',
+        'Py+Linux\Scripts\seo_index_extensions.py',
+        'Config\engine_profiles.json'
+    )
+    foreach ($relative in $required) {
+        $requiredPath = Join-Path $InstallDir $relative
+        if (-not (Test-Path -LiteralPath $requiredPath)) {
+            throw "Installation is incomplete; required file is missing: $relative"
+        }
+    }
+
     New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
     $cmdPath = Join-Path $BinDir 'seo-index.cmd'
     $launcher = Join-Path $InstallDir 'Win\Start-SEOIndexToolkit.ps1'
@@ -58,15 +71,30 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$launcher" %*
         if ($parts -notcontains $BinDir) {
             $newPath = (@($parts) + $BinDir) -join ';'
             [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-            Write-Host "Added $BinDir to your user PATH. Open a new terminal before using seo-index."
+            Write-Host "Added $BinDir to your user PATH."
         }
+    }
+
+    if (($env:Path -split ';') -notcontains $BinDir) { $env:Path = "$BinDir;$env:Path" }
+
+    $pythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
+    $pythonPath = if ($pythonCommand -and $pythonCommand.Source -notlike '*\Microsoft\WindowsApps\python.exe') { $pythonCommand.Source } else { $null }
+    if (-not $pythonPath) {
+        $pythonPath = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python*\python.exe') -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
     }
 
     Write-Host ''
     Write-Host 'SEO-INDEX VariScripts installed.' -ForegroundColor Green
     Write-Host "Install directory: $InstallDir"
     Write-Host "Command shim:      $cmdPath"
-    Write-Host 'Run: seo-index'
+    if ($pythonPath) {
+        Write-Host "Python:            $pythonPath"
+        Write-Host 'Run now:           seo-index'
+    }
+    else {
+        Write-Warning 'Python 3 was not found. Install it with: winget install --exact --id Python.Python.3.14 --source winget'
+        Write-Host 'After installing Python, run: seo-index'
+    }
 }
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
