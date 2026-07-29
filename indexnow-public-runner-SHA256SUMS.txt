@@ -1,0 +1,2 @@
+315694f06970af0078e9eeec26fce8d2810589eec403b04ba3739862318960e4  indexnow-public-runner-v1.0.0.zip
+a9f3bea907f46cc2991adf1deaddd1c7abae18f8b89ce06fbced197c8eaf72e8  indexnow-public-runner-v1.0.0.tar.gz
