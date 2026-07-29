@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "google": {
+      "label": "Google Index Readiness",
+      "crawler": "Googlebot",
+      "description": "Technical eligibility and canonical-signal readiness based on public Google Search documentation.",
+      "weights": {
+        "status_200": 20,
+        "robots_allowed": 15,
+        "no_noindex": 15,
+        "canonical_consistent": 12,
+        "indexable_text": 10,
+        "sitemap_inclusion": 6,
+        "https": 4,
+        "mobile_viewport": 4,
+        "title": 4,
+        "meta_description": 2,
+        "h1": 2,
+        "structured_data": 3,
+        "lastmod_present": 3
+      },
+      "critical": ["status_200", "robots_allowed", "no_noindex"]
+    },
+    "bing": {
+      "label": "Bing Index Readiness",
+      "crawler": "bingbot",
+      "description": "Technical discovery, freshness, and indexing readiness based on public Bing Webmaster guidance.",
+      "weights": {
+        "status_200": 18,
+        "robots_allowed": 14,
+        "no_noindex": 14,
+        "canonical_consistent": 11,
+        "indexable_text": 8,
+        "sitemap_inclusion": 10,
+        "indexnow_ready": 8,
+        "lastmod_present": 5,
+        "https": 3,
+        "title": 3,
+        "meta_description": 2,
+        "h1": 1,
+        "structured_data": 3
+      },
+      "critical": ["status_200", "robots_allowed", "no_noindex"]
+    },
+    "generic": {
+      "label": "General Index Readiness",
+      "crawler": "*",
+      "description": "Search-engine-neutral technical crawl and index readiness.",
+      "weights": {
+        "status_200": 20,
+        "robots_allowed": 15,
+        "no_noindex": 15,
+        "canonical_consistent": 12,
+        "indexable_text": 10,
+        "sitemap_inclusion": 8,
+        "https": 5,
+        "mobile_viewport": 3,
+        "title": 4,
+        "meta_description": 2,
+        "h1": 2,
+        "structured_data": 2,
+        "lastmod_present": 2
+      },
+      "critical": ["status_200", "robots_allowed", "no_noindex"]
+    }
+  }
+}
