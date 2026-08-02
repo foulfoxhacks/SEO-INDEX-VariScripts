@@ -19,9 +19,6 @@ import collections
 import html
 import ipaddress
 import json
-import math
-import mimetypes
-import os
 import secrets
 import socket
 import threading
@@ -175,7 +172,9 @@ def _sitemap_inventory(
     robots_text: str,
     timeout: int,
     user_agent: str,
-) -> list[str]:
+    max_entries: int,
+    url_validator: Optional[Callable[[str], None]] = None,
+) -> tuple[list[str], list[str]]:
     candidates: list[str] = []
     if explicit_sitemap:
         candidates.append(explicit_sitemap)
@@ -183,6 +182,7 @@ def _sitemap_inventory(
         candidates.extend(core.sitemap_urls_from_robots(robots_text))
         candidates.append(core.origin_for(start_url) + "/sitemap.xml")
     seen: set[str] = set()
+    errors: list[str] = []
     for candidate in candidates:
         try:
             candidate = core.normalize_url(candidate)
@@ -191,10 +191,21 @@ def _sitemap_inventory(
         if candidate in seen:
             continue
         seen.add(candidate)
-        collection = core.fetch_sitemaps([candidate], timeout, user_agent, max_sitemaps=1000)
+        collection = core.fetch_sitemaps(
+            [candidate], timeout, user_agent, max_sitemaps=1000,
+            max_entries=max_entries,
+            url_validator=url_validator,
+        )
+        errors.extend(collection.errors)
         if collection.entries:
-            return sorted({core.normalize_url(entry.url) for entry in collection.entries})
-    return []
+            normalized_entries: set[str] = set()
+            for entry in collection.entries:
+                try:
+                    normalized_entries.add(core.normalize_url(entry.url))
+                except core.ToolkitError as exc:
+                    errors.append(f"Invalid sitemap page URL {entry.url}: {exc}")
+            return sorted(normalized_entries), errors
+    return [], errors
 
 
 def _compute_pagerank(pages: list[GraphPage], edges: list[GraphEdge]) -> None:
@@ -240,6 +251,7 @@ def crawl_internal_links(
     follow_nofollow: bool = False,
     drop_query: bool = False,
     progress: Optional[Callable[[int, int, str], None]] = None,
+    url_validator: Optional[Callable[[str], None]] = None,
 ) -> LinkGraphReport:
     """Crawl one host and return a deterministic site relationship report."""
     if not 1 <= max_pages <= 10000:
@@ -254,12 +266,22 @@ def crawl_internal_links(
         raise core.ToolkitError("Start URL must be an absolute HTTP or HTTPS URL.")
     allowed_host = (urlsplit(normalized_start).hostname or "").lower()
 
+    def validate_page_target(value: str) -> None:
+        if url_validator:
+            url_validator(value)
+        target_host = (urlsplit(value).hostname or "").lower()
+        if not _host_matches(target_host, allowed_host, include_subdomains):
+            raise core.ToolkitError(f"Redirect left the configured crawl host: {value}")
+
     robots_parser: Optional[urllib.robotparser.RobotFileParser] = None
     robots_text = ""
     robots_url = core.origin_for(normalized_start) + "/robots.txt"
     robots_status = 0
     if not ignore_robots:
-        fetched_robots = core.fetch_url(robots_url, timeout, user_agent, accept="text/plain,*/*", max_bytes=2 * 1024 * 1024)
+        fetched_robots = core.fetch_url(
+            robots_url, timeout, user_agent, accept="text/plain,*/*",
+            max_bytes=2 * 1024 * 1024, url_validator=url_validator,
+        )
         robots_status = fetched_robots.status
         if fetched_robots.status == 200:
             robots_text = fetched_robots.text
@@ -267,7 +289,11 @@ def crawl_internal_links(
             robots_parser.set_url(robots_url)
             robots_parser.parse(robots_text.splitlines())
 
-    sitemap_urls = _sitemap_inventory(normalized_start, sitemap, robots_text, timeout, user_agent)
+    sitemap_urls, sitemap_errors = _sitemap_inventory(
+        normalized_start, sitemap, robots_text, timeout, user_agent,
+        max_entries=min(1_000_000, max(10_000, max_pages * 20)),
+        url_validator=url_validator,
+    )
 
     queue: collections.deque[tuple[str, int]] = collections.deque([(normalized_start, 0)])
     queued = {normalized_start}
@@ -295,7 +321,7 @@ def crawl_internal_links(
                 progress(len(pages), max_pages, requested)
             continue
 
-        fetched = core.fetch_url(requested, timeout, user_agent)
+        fetched = core.fetch_url(requested, timeout, user_agent, url_validator=validate_page_target)
         final_url = normalize_link(fetched.final_url or requested, requested, drop_query) or requested
         final_by_requested[requested] = final_url
         content_type = fetched.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -428,6 +454,7 @@ def crawl_internal_links(
         "canonicalMismatches": canonical_mismatches,
         "genericAnchors": generic_anchors,
         "duplicateTitleClusters": duplicate_titles,
+        "sitemapErrors": sitemap_errors,
     }
     internal_edges = sum(1 for edge in edges if not edge.external)
     external_edges = len(edges) - internal_edges
@@ -445,6 +472,7 @@ def crawl_internal_links(
         "noindexPages": len(noindex),
         "canonicalMismatches": len(canonical_mismatches),
         "sitemapUrls": len(sitemap_urls),
+        "sitemapErrors": len(sitemap_errors),
         "robotsStatus": robots_status,
         "truncated": bool(queue),
     }
@@ -474,14 +502,6 @@ def crawl_internal_links(
     )
 
 
-def _status_color(status: int) -> str:
-    if 200 <= status < 300:
-        return "#70f5a4"
-    if 300 <= status < 400:
-        return "#ffd76a"
-    return "#ff7188"
-
-
 def write_link_report_html(report: LinkGraphReport, path: str) -> None:
     payload = json.dumps(report.to_dict(), ensure_ascii=False).replace("</", "<\\/")
     summary_cards = "".join(
@@ -491,6 +511,7 @@ def write_link_report_html(report: LinkGraphReport, path: str) -> None:
     )
     document = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <title>Internal Link Graph · {html.escape(report.allowed_host)}</title>
 <style>
 :root{{--bg:#0d0916;--panel:#171124;--line:#3d3154;--text:#f6efff;--muted:#b9aec9;--purple:#b86cff;--pink:#ff6bc7;--cyan:#65e6ff;--green:#70f5a4;--yellow:#ffd76a;--red:#ff7188;color-scheme:dark;font-family:Inter,system-ui,sans-serif}}*{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at 20% -10%,#31184f,transparent 34%),var(--bg);color:var(--text)}}header,main{{width:min(1400px,calc(100% - 32px));margin:auto}}header{{padding:38px 0 20px}}h1{{font-size:clamp(2rem,5vw,4.5rem);margin:0;letter-spacing:-.05em}}p{{color:var(--muted)}}.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}}.cards article,.panel{{background:#171124dd;border:1px solid var(--line);border-radius:18px;padding:18px}}.cards strong{{font-size:1.8rem;display:block}}.cards span{{color:var(--muted);font-size:.82rem}}.layout{{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,.7fr);gap:16px}}canvas{{width:100%;height:650px;background:#08060d;border-radius:14px;display:block}}.toolbar{{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}}button,input{{font:inherit;border:1px solid var(--line);background:#20182e;color:white;border-radius:10px;padding:9px 12px}}button{{cursor:pointer}}button:hover{{border-color:var(--purple)}}.findings{{max-height:650px;overflow:auto}}details{{border-bottom:1px solid #ffffff12;padding:12px 0}}summary{{cursor:pointer;font-weight:700}}pre{{white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:.75rem}}table{{width:100%;border-collapse:collapse;margin:18px 0 50px;font-size:.82rem}}th,td{{padding:10px;border-bottom:1px solid #ffffff12;text-align:left}}th{{position:sticky;top:0;background:var(--bg)}}a{{color:var(--cyan)}}@media(max-width:900px){{.layout{{grid-template-columns:1fr}}.cards{{grid-template-columns:1fr 1fr}}canvas{{height:480px}}}}
@@ -504,10 +525,10 @@ function esc(v=''){{return String(v).replace(/[&<>\"]/g,c=>({{'&':'&amp;','<':'&
 function rebuild(){{query=document.getElementById('search').value.toLowerCase();const src=data.pages.filter(p=>!query||p.final_url.toLowerCase().includes(query));const keep=new Set(src.map(p=>p.final_url));nodes=src.slice(0,500).map((p,i)=>({{...p,x:Math.cos(i/src.length*Math.PI*2)*220,y:Math.sin(i/src.length*Math.PI*2)*220,vx:0,vy:0}}));const limited=new Set(nodes.map(n=>n.final_url));edges=data.edges.filter(e=>!e.external&&limited.has(e.source)&&limited.has(e.resolved_target||e.target));fit();}}
 function fit(){{const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);draw()}}
 function simulate(){{const map=new Map(nodes.map(n=>[n.final_url,n]));for(let k=0;k<100;k++){{for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){{let a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy+20,f=350/d2;a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f}}for(const e of edges){{let a=map.get(e.source),b=map.get(e.resolved_target||e.target);if(!a||!b)continue;let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,f=(d-90)*.0015;a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f}}for(const n of nodes){{n.vx+=-n.x*.0008;n.vy+=-n.y*.0008;n.vx*=.82;n.vy*=.82;n.x+=n.vx;n.y+=n.vy}}}}draw()}}
-function draw(){{const w=canvas.clientWidth,h=canvas.clientHeight,map=new Map(nodes.map(n=>[n.final_url,n]));ctx.clearRect(0,0,w,h);ctx.save();ctx.translate(w/2,h/2);ctx.strokeStyle='#6b4e8844';ctx.lineWidth=1;for(const e of edges){{const a=map.get(e.source),b=map.get(e.target);if(a&&b){{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}}}}for(const n of nodes){{const r=4+Math.sqrt(n.pagerank||0)*.65;ctx.fillStyle=n.status>=400||!n.status?'#ff7188':n.noindex?'#ffd76a':'#70f5a4';ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();if(labels&&nodes.length<120){{ctx.fillStyle='#f5efff';ctx.font='11px system-ui';ctx.fillText(new URL(n.final_url).pathname||'/',n.x+r+3,n.y+3)}}}}ctx.restore()}}
+function draw(){{const w=canvas.clientWidth,h=canvas.clientHeight,map=new Map(nodes.map(n=>[n.final_url,n]));ctx.clearRect(0,0,w,h);ctx.save();ctx.translate(w/2,h/2);ctx.strokeStyle='#6b4e8844';ctx.lineWidth=1;for(const e of edges){{const a=map.get(e.source),b=map.get(e.resolved_target||e.target);if(a&&b){{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}}}}for(const n of nodes){{const r=4+Math.sqrt(n.pagerank||0)*.65;ctx.fillStyle=n.status>=400||!n.status?'#ff7188':n.noindex?'#ffd76a':'#70f5a4';ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();if(labels&&nodes.length<120){{ctx.fillStyle='#f5efff';ctx.font='11px system-ui';ctx.fillText(new URL(n.final_url).pathname||'/',n.x+r+3,n.y+3)}}}}ctx.restore()}}
 document.getElementById('reset').onclick=()=>{{rebuild();simulate()}};document.getElementById('labels').onclick=()=>{{labels=!labels;draw()}};document.getElementById('search').oninput=()=>{{rebuild();simulate()}};addEventListener('resize',fit);
 document.getElementById('findings').innerHTML=Object.entries(data.findings).map(([k,v])=>`<details ${{v.length?'open':''}}><summary>${{k}} (${{v.length}})</summary><pre>${{esc(JSON.stringify(v.slice(0,100),null,2))}}</pre></details>`).join('');
-document.getElementById('pages').innerHTML=data.pages.map(p=>`<tr><td>${{p.depth}}</td><td style="color:${{p.status>=400||!p.status?'#ff7188':'#70f5a4'}}">${{p.status||'blocked'}}</td><td><a href="${{esc(p.final_url)}}">${{esc(p.final_url)}}</a></td><td>${{p.incoming}}</td><td>${{p.outgoing}}</td><td>${{p.pagerank}}</td><td>${{esc(p.title)}}</td></tr>`).join('');rebuild();simulate();
+document.getElementById('pages').innerHTML=data.pages.map(p=>`<tr><td>${{p.depth}}</td><td style="color:${{p.status>=400||!p.status?'#ff7188':'#70f5a4'}}">${{p.status||'blocked'}}</td><td><a href="${{esc(p.final_url)}}" rel="noopener noreferrer">${{esc(p.final_url)}}</a></td><td>${{p.incoming}}</td><td>${{p.outgoing}}</td><td>${{p.pagerank}}</td><td>${{esc(p.title)}}</td></tr>`).join('');rebuild();simulate();
 </script></main></body></html>"""
     output = Path(path).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -558,6 +579,7 @@ def run_links(args: argparse.Namespace, console: core.Console) -> int:
         ("Deep pages", s["deepPages"]),
         ("Noindex pages", s["noindexPages"]),
         ("Canonical mismatches", s["canonicalMismatches"]),
+        ("Sitemap errors", s["sitemapErrors"]),
     ]
     for label, value in rows:
         color = core.Style.RED if label in {"Broken pages", "Noindex pages"} and value else core.Style.YELLOW if value and label not in {"Pages crawled", "Internal edges", "External edges"} else core.Style.GREEN
@@ -596,6 +618,14 @@ def _is_private_target(url: str) -> bool:
         if address.is_private or address.is_loopback or address.is_link_local or address.is_reserved or address.is_multicast or address.is_unspecified:
             return True
     return False
+
+
+def _require_public_target(url: str) -> None:
+    if _is_private_target(url):
+        raise core.ToolkitError(
+            "Private, loopback, link-local, reserved, multicast, and unspecified targets are blocked. "
+            "Restart with --allow-private-targets only when intended."
+        )
 
 
 def serve_workbench(args: argparse.Namespace, console: core.Console) -> int:
@@ -659,7 +689,7 @@ def serve_workbench(args: argparse.Namespace, console: core.Console) -> int:
                     "ok": True,
                     "tool": core.TOOL_NAME,
                     "version": core.VERSION,
-                    "capabilities": ["internal-link-graph"],
+                    "capabilities": ["internal-link-graph", "page-quality"],
                     "privateTargets": bool(args.allow_private_targets),
                 })
                 return
@@ -667,7 +697,7 @@ def serve_workbench(args: argparse.Namespace, console: core.Console) -> int:
 
         def do_POST(self) -> None:
             parsed = urllib.parse.urlsplit(self.path)
-            if parsed.path != "/api/links":
+            if parsed.path not in {"/api/links", "/api/page"}:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Unknown API endpoint."})
                 return
             if not self._authorized():
@@ -691,8 +721,25 @@ def serve_workbench(args: argparse.Namespace, console: core.Console) -> int:
                 target = str(payload.get("url", "")).strip()
                 if not target:
                     raise core.ToolkitError("A target URL is required.")
-                if _is_private_target(target) and not args.allow_private_targets:
-                    raise core.ToolkitError("Private, loopback, link-local, and reserved targets are blocked. Restart with --allow-private-targets only when intended.")
+                url_validator = None if args.allow_private_targets else _require_public_target
+                if url_validator:
+                    url_validator(target)
+                if parsed.path == "/api/page":
+                    from seo_index_quality import audit_page
+                    if not crawl_lock.acquire(blocking=False):
+                        self._json(HTTPStatus.CONFLICT, {"error": "Another live audit is already running."})
+                        return
+                    try:
+                        report = audit_page(
+                            target,
+                            min(max(int(payload.get("timeout", 20)), 1), 120),
+                            core.DEFAULT_USER_AGENT,
+                            url_validator=url_validator,
+                        )
+                    finally:
+                        crawl_lock.release()
+                    self._json(HTTPStatus.OK, report.to_dict())
+                    return
                 options = {
                     "sitemap": payload.get("sitemap") or None,
                     "max_pages": min(max(int(payload.get("maxPages", 100)), 1), args.api_max_pages),
@@ -705,6 +752,7 @@ def serve_workbench(args: argparse.Namespace, console: core.Console) -> int:
                     "ignore_robots": bool(payload.get("ignoreRobots", False)),
                     "follow_nofollow": bool(payload.get("followNofollow", False)),
                     "drop_query": bool(payload.get("dropQuery", False)),
+                    "url_validator": url_validator,
                 }
                 if not crawl_lock.acquire(blocking=False):
                     self._json(HTTPStatus.CONFLICT, {"error": "Another live crawl is already running."})

@@ -1,69 +1,63 @@
-# Publish v1.2.0 to GitHub
+# Repository release guide
 
-This package is arranged to merge into the root of `foulfoxhacks/SEO-INDEX-VariScripts`.
+Use a feature branch and pull request so the cross-platform CI matrix can validate the release before it reaches `main`.
 
-## Windows PowerShell
+## 1. Verify locally
 
 ```powershell
-$Repo = "$HOME\Documents\Projects\SEO-INDEX-VariScripts"
-$Package = "$HOME\Documents\Projects\SEO-INDEX-VariScripts-v1.2.0-full.zip"
-$Stage = Join-Path $env:TEMP "seo-index-v1.2.0"
-
-Remove-Item $Stage -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive -LiteralPath $Package -DestinationPath $Stage -Force
-$Source = Join-Path $Stage "SEO-INDEX-VariScripts-v1.2.0"
-
-robocopy $Source $Repo /E /XD .git __pycache__
-if ($LASTEXITCODE -ge 8) { throw "Robocopy failed: $LASTEXITCODE" }
-
-python -m py_compile "$Repo\Py+Linux\Scripts\seo_index_toolkit.py" "$Repo\Py+Linux\Scripts\seo_index_extensions.py"
-python "$Repo\Tests\test_toolkit.py"
-
-git -C $Repo add .
-git -C $Repo update-index --chmod=+x -- `
-  "seo-index" `
-  "install.sh" `
-  "MacOS/seo-index-toolkit.command" `
-  "MacOS/submit-indexnow-macos.command" `
-  "MacOS/redirect-lab.command" `
-  "MacOS/geo-audit.command" `
-  "MacOS/aeo-audit.command" `
-  "Py+Linux/Scripts/seo-index-toolkit.sh" `
-  "Py+Linux/Scripts/submit-indexnow-linux.sh" `
-  "Py+Linux/Scripts/redirect-audit.sh" `
-  "Py+Linux/Scripts/robots-audit.sh" `
-  "Py+Linux/Scripts/hreflang-audit.sh" `
-  "Py+Linux/Scripts/schema-audit.sh" `
-  "Py+Linux/Scripts/geo-audit.sh" `
-  "Py+Linux/Scripts/aeo-audit.sh"
-
-git -C $Repo commit -m "feat: add category scoring, SEO GEO AEO tools, and web workbench"
-git -C $Repo push origin main
+python -m compileall -q "Py+Linux\Scripts" "Py+Linux\seo_index_toolkit.py"
+python -m unittest discover -s Tests -p "test*.py" -v
+node --check docs\assets\app.js
+python -m json.tool docs\matrix.json | Out-Null
+python -m json.tool Config\engine_profiles.json | Out-Null
 ```
 
-Robocopy exit codes 0 through 7 are successful or informational. Only 8 and above represent failure.
+On Linux or macOS, also validate executable scripts:
 
-## Enable GitHub Pages
+```bash
+bash -n ./seo-index ./install.sh ./Py+Linux/*.sh ./Py+Linux/Scripts/*.sh ./MacOS/*.command
+```
 
-After pushing:
+## 2. Prepare a release branch
 
-1. Open the repository on GitHub.
-2. Select **Settings**.
-3. Select **Pages** under Code and automation.
-4. Set **Source** to **GitHub Actions**.
-5. Open **Actions** and run **Deploy graphical workbench to GitHub Pages**, or push another change under `docs/`.
+```powershell
+git switch -c release/v1.4.0
+git add .
+git update-index --chmod=+x -- `
+  "seo-index" `
+  "install.sh" `
+  "MacOS/*.command" `
+  "Py+Linux/*.sh" `
+  "Py+Linux/Scripts/*.sh"
+git diff --cached --check
+git commit -m "feat: release SEO-INDEX VariScripts v1.4.0"
+git push -u origin release/v1.4.0
+```
 
-Expected URL:
+Open a pull request, wait for **Test toolkit** and **Deploy graphical workbench to GitHub Pages** validation where applicable, then merge through the repository's normal review policy.
+
+## 3. GitHub Pages
+
+Repository settings should use **GitHub Actions** as the Pages source. The deployment workflow publishes only `docs/` and runs automatically for relevant changes on `main`.
+
+Configured custom domain:
+
+```text
+https://webtools.mellozone.site/
+```
+
+Project-site fallback:
 
 ```text
 https://foulfoxhacks.github.io/SEO-INDEX-VariScripts/
 ```
 
-## Verify after publishing
+## 4. Post-release smoke test
 
 ```powershell
 irm https://raw.githubusercontent.com/foulfoxhacks/SEO-INDEX-VariScripts/main/install.ps1 | iex
+seo-index --version
 seo-index --no-splash list-engines
+seo-index page --url https://example.com --fail-on never
 seo-index web --print-only
-seo-index redirect --url https://example.com
 ```

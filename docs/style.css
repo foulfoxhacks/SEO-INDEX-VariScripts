@@ -383,9 +383,22 @@ footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 7
 .finding-card pre { max-height: 280px; overflow: auto; margin: 0; padding: 14px 16px; border-top: 1px solid var(--line-soft); background: #09070f; color: var(--muted); font-size: .73rem; white-space: pre-wrap; word-break: break-word; }
 .live-loading { animation: livePulse 1.25s ease-in-out infinite; }
 @keyframes livePulse { 50% { opacity: .45; } }
+.subsection-heading { max-width: 780px; margin: 54px 0 20px; }
+.subsection-heading h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.5rem); letter-spacing: -.035em; }
+.subsection-heading > p:last-child { margin: 10px 0 0; color: var(--muted); }
+.quality-grid { display: grid; grid-template-columns: minmax(280px, .55fr) minmax(0, 1.45fr); gap: 16px; align-items: start; }
+.quality-form { display: grid; gap: 15px; padding: 20px; }
+.quality-form label { display: grid; gap: 7px; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.quality-summary { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 9px; margin-bottom: 20px; }
+.quality-summary article { padding: 13px; border: 1px solid var(--line-soft); border-radius: 12px; background: rgba(255,255,255,.025); }
+.quality-summary strong { display: block; font-size: 1.4rem; }
+.quality-summary span { color: var(--muted); font-size: .72rem; }
+.quality-section + .quality-section { margin-top: 22px; }
+.quality-section h3 { margin: 0 0 5px; font-size: 1rem; }
 
 @media (max-width: 1120px) {
   .live-grid { grid-template-columns: 1fr; }
+  .quality-grid { grid-template-columns: 1fr; }
   .live-findings { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 700px) {
@@ -393,8 +406,8 @@ footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 7
   .live-form { grid-template-columns: 1fr; }
   .live-form .wide { grid-column: auto; }
   #live-graph { height: 400px; }
-  .live-summary-grid, .live-findings { grid-template-columns: 1fr 1fr; }
+  .live-summary-grid, .live-findings, .quality-summary { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 460px) {
-  .live-summary-grid, .live-findings { grid-template-columns: 1fr; }
+  .live-summary-grid, .live-findings, .quality-summary { grid-template-columns: 1fr; }
 }

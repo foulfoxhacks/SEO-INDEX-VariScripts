@@ -7,11 +7,38 @@ A dependency-light, cross-platform indexing, technical SEO, GEO, and AEO diagnos
          ( o.o )     ~~~~)
           > ^ <
 ╭──────────────────────────────────────────────────────────╮
-│              SEO-INDEX VariScripts v1.3.0                │
+│              SEO-INDEX VariScripts v1.4.0                │
 │ foulfoxhacks  •  aka The Dev Sammy                       │
 │ Search signals, untangled.                               │
 ╰──────────────────────────────────────────────────────────╯
 ```
+
+## What v1.4 adds
+
+### Page Quality Audit
+
+`seo-index page` performs a single-fetch deep scan with more than 20 checks grouped by purpose:
+
+- crawl and index eligibility, canonical agreement, titles, descriptions, H1s, and JSON-LD
+- Open Graph and Twitter/X-compatible social preview metadata
+- missing image alternatives, intrinsic dimensions, responsive sources, and native lazy loading
+- document language, mobile viewport, heading order, visible text, and accessible link names
+- observed response time, decoded HTML size, compression, caching, and freshness headers
+- Content Security Policy, MIME sniffing protection, referrer policy, frame protection, and HSTS
+- JSON and Markdown evidence reports with configurable CI exit behavior
+
+The local workbench exposes the same audit through its token-protected API. Diagnostic title/description, timing, and payload-size budgets are explicitly labelled as heuristics rather than ranking rules or Core Web Vitals.
+
+### Reliability and security hardening
+
+- live audits now validate every redirect and nested sitemap request against the private-network policy
+- site crawls reject redirects that leave the configured host scope
+- compressed response bodies have a post-decompression size ceiling
+- response decoding honors HTTP and HTML charset declarations
+- IPv6 URL normalization preserves valid bracketed authorities
+- current search, training, advertising, and user-directed AI crawler identities are separated
+- cross-platform CI covers Python 3.10–3.14, Linux, Windows, macOS, shell syntax, PowerShell parsing, JavaScript, and JSON
+- legacy launchers now delegate to the canonical engine and generated Python bytecode is excluded
 
 ## What v1.3 adds
 
@@ -199,9 +226,22 @@ Menu:
  12. Start local graphical workbench
  13. List scoring profiles
  14. Open hosted graphical workbench
+ 15. Page Quality Audit
 ```
 
 ## Core commands
+
+### Page Quality Audit
+
+```bash
+seo-index page \
+  --url 'https://example.com/product' \
+  --json './reports/page-quality.json' \
+  --markdown './reports/page-quality.md' \
+  --fail-on critical
+```
+
+Use `--fail-on warning` for a strict CI gate or `--fail-on never` when the report should always be produced without a diagnostic exit code.
 
 ### Category scorecards
 
@@ -345,15 +385,18 @@ seo-index web --print-only
 
 ```bash
 seo-index canonical --sitemap 'https://example.com/sitemap.xml' --expected-host example.com
-seo-index sitemap --sitemap 'https://example.com/sitemap.xml' --check-pages 100
-seo-index indexnow --sitemap 'https://example.com/sitemap.xml' --key-location 'https://example.com/key.txt' --dry-run
+seo-index sitemap --sitemap 'https://example.com/sitemap.xml' --check-pages 100 --max-urls 1000000
+seo-index indexnow --sitemap 'https://example.com/sitemap.xml' --key-location 'https://example.com/key.txt' --max-urls 1000000 --dry-run
 ```
+
+Sitemap and IndexNow traversal are iterative and bounded by file, decoded-byte, and unique-URL ceilings so deeply nested or hostile inventories cannot grow without limit.
 
 ## Direct script endpoints
 
 Windows:
 
 ```text
+Win/Test-PageQuality.ps1
 Win/Test-RedirectChain.ps1
 Win/Test-CrawlerAccess.ps1
 Win/Test-Hreflang.ps1
@@ -365,6 +408,7 @@ Win/Test-AEOReadiness.ps1
 Linux/macOS shell endpoints:
 
 ```text
+Py+Linux/Scripts/page-quality-audit.sh
 Py+Linux/Scripts/redirect-audit.sh
 Py+Linux/Scripts/robots-audit.sh
 Py+Linux/Scripts/hreflang-audit.sh
@@ -376,6 +420,7 @@ Py+Linux/Scripts/aeo-audit.sh
 macOS clickable launchers:
 
 ```text
+MacOS/page-quality-audit.command
 MacOS/redirect-lab.command
 MacOS/geo-audit.command
 MacOS/aeo-audit.command
@@ -436,6 +481,7 @@ SEO-INDEX-VariScripts/
 ├── Py+Linux/Scripts/
 │   ├── seo_index_toolkit.py
 │   ├── seo_index_extensions.py
+│   ├── seo_index_quality.py
 │   ├── seo_index_site.py
 │   ├── internal-link-graph.sh
 │   ├── serve-workbench.sh
@@ -455,21 +501,23 @@ SEO-INDEX-VariScripts/
 
 ```bash
 python3 -m py_compile './Py+Linux/Scripts/'*.py
-python3 ./Tests/test_toolkit.py  # 9 deterministic tests
+python3 ./Tests/test_toolkit.py  # 20 deterministic tests
 bash -n ./Py+Linux/Scripts/*.sh ./MacOS/*.command ./install.sh ./seo-index
 ```
 
 ## Official references
 
 - Google Search technical requirements: https://developers.google.com/search/docs/essentials/technical
-- Google canonicalization: https://developers.google.com/search/docs/crawling-indexing/canonicalization
+- Google canonicalization: https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
+- Google image SEO: https://developers.google.com/search/docs/appearance/google-images
 - Google robots metadata: https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag
 - Google sitemaps: https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview
 - Bing Webmaster guidance: https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a
 - Bing sitemaps: https://www.bing.com/webmasters/help/sitemaps-3b5cf6ed
 - IndexNow: https://www.indexnow.org/documentation
 - OpenAI publisher crawler guidance: https://help.openai.com/en/articles/12627856-publishers-and-developers-faq
-- Anthropic crawler guidance: https://support.anthropic.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler
+- OpenAI advertising crawler guidance: https://help.openai.com/en/articles/20001243-advertiser-guidance-for-allowing-openai-web-crawlers
+- Anthropic crawler guidance: https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler
 - Perplexity crawlers: https://docs.perplexity.ai/docs/resources/perplexity-crawlers
 - Schema.org: https://schema.org/docs/documents.html
 - GitHub Pages custom workflows: https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages

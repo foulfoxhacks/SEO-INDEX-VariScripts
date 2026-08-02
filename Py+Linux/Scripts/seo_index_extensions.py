@@ -18,10 +18,8 @@ import re
 import time
 import urllib.error
 import urllib.request
-import urllib.robotparser
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Any, Iterable, Optional
 from urllib.parse import urljoin, urlsplit
 
@@ -33,9 +31,13 @@ DATE_RE = re.compile(r"\b(?:19|20)\d{2}[-/.](?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[1
 SCHEMA_CONTEXTS = {"https://schema.org", "http://schema.org", "https://schema.org/", "http://schema.org/"}
 AI_CRAWLERS = {
     "OAI-SearchBot": "OpenAI search discovery",
-    "ClaudeBot": "Anthropic crawler",
-    "PerplexityBot": "Perplexity search discovery",
+    "OAI-AdsBot": "OpenAI advertising landing-page validation",
     "GPTBot": "OpenAI model-training crawler",
+    "Claude-SearchBot": "Anthropic search indexing",
+    "Claude-User": "Anthropic user-directed retrieval",
+    "ClaudeBot": "Anthropic model-development crawler",
+    "PerplexityBot": "Perplexity search discovery",
+    "Perplexity-User": "Perplexity user-directed retrieval",
 }
 SEARCH_CRAWLERS = {
     "Googlebot": "Google Search",

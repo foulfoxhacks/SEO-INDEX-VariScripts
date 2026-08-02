@@ -1,0 +1,68 @@
+name: Test toolkit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: ubuntu-latest
+            python: '3.14'
+          - os: windows-latest
+            python: '3.12'
+          - os: macos-latest
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Compile Python sources
+        run: python -m compileall -q "Py+Linux/Scripts" "Py+Linux/seo_index_toolkit.py"
+      - name: Run deterministic tests
+        run: python -m unittest discover -s Tests -p "test*.py" -v
+      - name: Verify command-line entry points
+        shell: bash
+        run: |
+          python "Py+Linux/Scripts/seo_index_toolkit.py" --version
+          python "Py+Linux/seo_index_toolkit.py" --version
+
+  static-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate shell launchers
+        run: bash -n ./seo-index ./install.sh ./Py+Linux/*.sh ./Py+Linux/Scripts/*.sh ./MacOS/*.command
+      - name: Validate browser JavaScript and JSON
+        run: |
+          node --check docs/assets/app.js
+          python -m json.tool docs/matrix.json >/dev/null
+          python -m json.tool Config/engine_profiles.json >/dev/null
+
+  powershell-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) { throw ($errors | Out-String) }
+          }
