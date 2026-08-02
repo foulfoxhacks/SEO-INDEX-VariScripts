@@ -9,7 +9,7 @@ Uses only the Python standard library.
 from __future__ import annotations
 
 import argparse
-import gzip
+import collections
 import json
 import re
 import sys
@@ -17,13 +17,16 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Iterable, Optional
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_ENDPOINT = "https://api.indexnow.org/indexnow"
+MAX_REMOTE_BYTES = 50 * 1024 * 1024
+MAX_API_RESPONSE_BYTES = 1024 * 1024
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,128}$")
 SUPPORTED_SCHEMES = {"http", "https"}
 STATUS_MEANINGS = {
@@ -81,13 +84,16 @@ def fetch_bytes(url: str, timeout: int, user_agent: str) -> FetchResult:
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = response.read(MAX_REMOTE_BYTES + 1)
+            if len(data) > MAX_REMOTE_BYTES:
+                raise RunnerError(f"GET {url} exceeded {MAX_REMOTE_BYTES:,} bytes.")
             return FetchResult(
-                data=response.read(),
+                data=data,
                 final_url=response.geturl(),
                 status=int(response.status),
             )
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace").strip()
+        body = exc.read(65_537)[:65_536].decode("utf-8", errors="replace").strip()
         detail = f" Response: {body[:500]}" if body else ""
         raise RunnerError(f"GET {url} failed with HTTP {exc.code}.{detail}") from exc
     except urllib.error.URLError as exc:
@@ -98,9 +104,16 @@ def decode_remote_text(result: FetchResult) -> str:
     data = result.data
     if data[:2] == b"\x1f\x8b":
         try:
-            data = gzip.decompress(data)
-        except OSError as exc:
+            decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            data = decoder.decompress(data, MAX_REMOTE_BYTES + 1)
+            if len(data) <= MAX_REMOTE_BYTES:
+                data += decoder.flush(MAX_REMOTE_BYTES + 1 - len(data))
+        except zlib.error as exc:
             raise RunnerError(f"Could not decompress GZip response from {result.final_url}") from exc
+        if len(data) > MAX_REMOTE_BYTES or decoder.unconsumed_tail:
+            raise RunnerError(f"Decompressed response exceeded {MAX_REMOTE_BYTES:,} bytes: {result.final_url}")
+        if not decoder.eof:
+            raise RunnerError(f"GZip response was incomplete: {result.final_url}")
     try:
         return data.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -129,11 +142,14 @@ def collect_sitemap_urls(
     timeout: int,
     user_agent: str,
     max_sitemaps: int,
+    max_urls: int,
 ) -> tuple[list[str], int]:
     visited: set[str] = set()
-    page_urls: list[str] = []
+    page_urls: set[str] = set()
+    queue = collections.deque(sitemap_urls)
 
-    def visit(url: str) -> None:
+    while queue:
+        url = queue.popleft()
         parsed = require_http_url(url, "Sitemap URL")
         normalized_visit = urlunsplit(
             (
@@ -145,7 +161,7 @@ def collect_sitemap_urls(
             )
         )
         if normalized_visit in visited:
-            return
+            continue
         if len(visited) >= max_sitemaps:
             raise RunnerError(
                 f"The sitemap traversal exceeded --max-sitemaps ({max_sitemaps})."
@@ -166,22 +182,21 @@ def collect_sitemap_urls(
             if not children:
                 raise RunnerError(f"Sitemap index contains no child sitemap locations: {url}")
             for child in children:
-                visit(child)
-            return
+                queue.append(child)
+            continue
 
         if root_name == "urlset":
-            page_urls.extend(child_locations(root, "url"))
-            return
+            page_urls.update(child_locations(root, "url"))
+            if len(page_urls) > max_urls:
+                raise RunnerError(f"Sitemap inventory exceeded --max-urls ({max_urls:,}).")
+            continue
 
         raise RunnerError(
             f"Unsupported sitemap root element {root_name!r} at {url}; "
             "expected 'urlset' or 'sitemapindex'."
         )
 
-    for sitemap_url in sitemap_urls:
-        visit(sitemap_url)
-
-    return page_urls, len(visited)
+    return sorted(page_urls), len(visited)
 
 
 def key_scope_directory(key_location: str) -> str:
@@ -272,10 +287,10 @@ def post_batch(
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            response_body = response.read().decode("utf-8", errors="replace").strip()
+            response_body = response.read(MAX_API_RESPONSE_BYTES + 1)[:MAX_API_RESPONSE_BYTES].decode("utf-8", errors="replace").strip()
             return int(response.status), response_body
     except urllib.error.HTTPError as exc:
-        response_body = exc.read().decode("utf-8", errors="replace").strip()
+        response_body = exc.read(MAX_API_RESPONSE_BYTES + 1)[:MAX_API_RESPONSE_BYTES].decode("utf-8", errors="replace").strip()
         meaning = STATUS_MEANINGS.get(exc.code, "Unexpected HTTP response.")
         detail = f" Response: {response_body[:500]}" if response_body else ""
         raise RunnerError(f"HTTP {exc.code} - {meaning}{detail}") from exc
@@ -323,6 +338,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-sitemaps", type=int, default=1000, help="Maximum recursively fetched sitemap files."
     )
     parser.add_argument(
+        "--max-urls", type=int, default=1_000_000, help="Maximum unique page URLs loaded from all sitemaps."
+    )
+    parser.add_argument(
         "--user-agent", default=f"IndexNow-Public-Runner/{VERSION}", help="HTTP User-Agent."
     )
     parser.add_argument("--show-urls", action="store_true", help="Print every normalized URL.")
@@ -342,6 +360,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         raise RunnerError("--timeout must be between 1 and 600 seconds.")
     if not 1 <= args.max_sitemaps <= 10_000:
         raise RunnerError("--max-sitemaps must be between 1 and 10,000.")
+    if not 1 <= args.max_urls <= 10_000_000:
+        raise RunnerError("--max-urls must be between 1 and 10,000,000.")
 
     key_parsed = require_http_url(args.key_location, "Key location")
     require_http_url(args.endpoint, "Endpoint")
@@ -393,7 +413,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         raise RunnerError("The hosted key must be 8-128 letters, numbers, or hyphens.")
 
     raw_urls, sitemap_count = collect_sitemap_urls(
-        args.sitemap, args.timeout, args.user_agent, args.max_sitemaps
+        args.sitemap, args.timeout, args.user_agent, args.max_sitemaps, args.max_urls
     )
     if not raw_urls:
         raise RunnerError("No page URLs were found in the supplied sitemap files.")

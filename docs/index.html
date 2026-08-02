@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0d0916">
   <meta name="color-scheme" content="dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <link rel="canonical" href="https://webtools.mellozone.site/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="SEO-INDEX VariScripts Workbench">
@@ -73,7 +73,7 @@
 <span class="purple">   ( o.o )   ~~~~)</span>
 <span class="purple">    &gt; ^ &lt;</span>
 
-<span class="cyan">SEO-INDEX VariScripts v1.3.0</span>
+<span class="cyan">SEO-INDEX VariScripts v1.4.0</span>
 <span class="dim">site intelligence enabled</span>
 
 <span class="green">PASS</span> crawl eligibility
@@ -88,7 +88,7 @@ Internal edges <span class="cyan">1,204</span></code></pre>
       </section>
 
       <section class="overview-grid" aria-label="Workbench capabilities">
-        <article class="metric-card"><span>12</span><strong>Focused tools</strong><p>Distinct lanes without duplicate wrappers.</p></article>
+        <article class="metric-card"><span>13</span><strong>Focused tools</strong><p>Distinct lanes with JSON evidence and CI-friendly exits.</p></article>
         <article class="metric-card"><span>5</span><strong>Score profiles</strong><p>Google, Bing, generic, GEO, and AEO.</p></article>
         <article class="metric-card"><span>3</span><strong>Operating systems</strong><p>Windows, macOS, and Linux launchers.</p></article>
         <article class="metric-card"><span>0</span><strong>Browser uploads</strong><p>Reports stay on the device.</p></article>
@@ -126,7 +126,7 @@ Internal edges <span class="cyan">1,204</span></code></pre>
             <label>Maximum pages<input id="live-max-pages" type="number" min="1" max="500" value="100"></label>
             <label>Maximum depth<input id="live-max-depth" type="number" min="0" max="20" value="5"></label>
             <label>Request delay (ms)<input id="live-delay" type="number" min="0" max="5000" value="75"></label>
-            <label>Robots user-agent<select id="live-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>SEO-INDEX-VariScripts</option></select></label>
+            <label>Robots user-agent<select id="live-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>OAI-AdsBot</option><option>Claude-SearchBot</option><option>PerplexityBot</option><option>SEO-INDEX-VariScripts</option></select></label>
             <label class="check"><input id="live-subdomains" type="checkbox"> Include subdomains</label>
             <label class="check"><input id="live-drop-query" type="checkbox"> Collapse query variants</label>
             <button id="run-live-links" class="button primary wide" type="submit">Run Internal Link Graph</button>
@@ -139,6 +139,15 @@ Internal edges <span class="cyan">1,204</span></code></pre>
           </div>
         </div>
         <div id="live-findings" class="live-findings"></div>
+        <div class="subsection-heading"><p class="eyebrow">Single-page deep scan</p><h3>Inspect presentation, media, delivery, and browser safety</h3><p>Run more than 20 evidence-backed checks across eligibility, metadata, social previews, images, accessible link names, caching, response budgets, and security headers.</p></div>
+        <div class="quality-grid">
+          <form id="live-page-form" class="panel quality-form">
+            <label>Page URL<input id="quality-url" type="url" inputmode="url" placeholder="https://example.com/page" required></label>
+            <button id="run-live-page" class="button primary" type="submit">Run Page Quality Audit</button>
+            <p id="quality-note" class="form-note">Local mode blocks private targets and validates redirect destinations by default.</p>
+          </form>
+          <div id="quality-results" class="panel results"><p>Start local mode, then scan a public page.</p></div>
+        </div>
       </section>
 
       <section id="builder" class="section-block split-section">
@@ -196,7 +205,7 @@ Internal edges <span class="cyan">1,204</span></code></pre>
           <div class="lab-inputs"><label>Page URL<input id="lab-url" value="https://example.com/page"></label><label>Raw response headers<textarea id="lab-headers" rows="8" placeholder="HTTP/2 200&#10;content-type: text/html&#10;x-robots-tag: index, follow"></textarea></label><label>HTML source<textarea id="lab-html" rows="14" placeholder="Paste rendered or server HTML here"></textarea></label><button id="analyze-html" class="button primary">Analyze evidence</button></div>
           <div id="html-results" class="panel results"><p>Paste evidence and run the analyzer.</p></div>
         </div>
-        <div id="robots-lab" class="lab-panel"><div class="lab-inputs"><label>Target path<input id="robots-path" value="/"></label><label>Crawler<select id="robots-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>ClaudeBot</option><option>PerplexityBot</option><option>GPTBot</option></select></label><label>robots.txt<textarea id="robots-text" rows="16" placeholder="User-agent: *&#10;Allow: /&#10;Sitemap: https://example.com/sitemap.xml"></textarea></label><button id="analyze-robots" class="button primary">Evaluate rules</button></div><div id="robots-results" class="panel results"><p>Paste robots.txt to inspect crawler access and sitemap directives.</p></div></div>
+        <div id="robots-lab" class="lab-panel"><div class="lab-inputs"><label>Target path<input id="robots-path" value="/"></label><label>Crawler<select id="robots-agent"><option>Googlebot</option><option>bingbot</option><option>OAI-SearchBot</option><option>OAI-AdsBot</option><option>GPTBot</option><option>Claude-SearchBot</option><option>Claude-User</option><option>ClaudeBot</option><option>PerplexityBot</option><option>Perplexity-User</option></select></label><label>robots.txt<textarea id="robots-text" rows="16" placeholder="User-agent: *&#10;Allow: /&#10;Sitemap: https://example.com/sitemap.xml"></textarea></label><button id="analyze-robots" class="button primary">Evaluate rules</button></div><div id="robots-results" class="panel results"><p>Paste robots.txt to inspect crawler access and sitemap directives.</p></div></div>
         <div id="redirect-lab" class="lab-panel"><div class="lab-inputs"><label>Redirect Lab JSON<textarea id="redirect-json" rows="18" placeholder='{"tool":"redirect","report":{"hops":[]}}'></textarea></label><button id="analyze-redirect" class="button primary">Render chain</button></div><div id="redirect-results" class="panel results"><p>Paste JSON produced by <code>seo-index redirect --json report.json</code>.</p></div></div>
       </section>
 

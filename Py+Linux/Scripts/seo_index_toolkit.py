@@ -16,8 +16,9 @@ not official search-engine scores and do not predict ranking or guarantee indexi
 from __future__ import annotations
 
 import argparse
+import codecs
+import collections
 import concurrent.futures
-import gzip
 import json
 import math
 import os
@@ -31,19 +32,26 @@ import urllib.request
 import urllib.robotparser
 import webbrowser
 import xml.etree.ElementTree as ET
+import zlib
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 TOOL_NAME = "SEO-INDEX VariScripts"
 DEFAULT_USER_AGENT = f"SEO-INDEX-VariScripts/{VERSION}"
 SUPPORTED_SCHEMES = {"http", "https"}
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,128}$")
 DIRECTIVE_SPLIT = re.compile(r"[\s,]+")
 WORKBENCH_URL = "https://webtools.mellozone.site/"
+MAX_SITEMAP_BYTES = 50 * 1024 * 1024
+CHARSET_RE = re.compile(r"charset\s*=\s*[\"']?\s*([A-Za-z0-9._:+-]+)", re.I)
+META_CHARSET_RE = re.compile(
+    br"<meta\s+[^>]*(?:charset\s*=\s*[\"']?\s*([A-Za-z0-9._:+-]+)|content\s*=\s*[\"'][^\"']*charset\s*=\s*([A-Za-z0-9._:+-]+))",
+    re.I,
+)
 
 
 class ToolkitError(RuntimeError):
@@ -162,13 +170,7 @@ class FetchResult:
 
     @property
     def text(self) -> str:
-        data = self.data
-        if data[:2] == b"\x1f\x8b":
-            try:
-                data = gzip.decompress(data)
-            except OSError:
-                pass
-        return data.decode("utf-8-sig", errors="replace")
+        return decode_http_body(self.data, self.headers.get("content-type", ""))
 
 
 @dataclass
@@ -203,7 +205,10 @@ class SitemapCollection:
     def by_url(self) -> dict[str, SitemapEntry]:
         result: dict[str, SitemapEntry] = {}
         for entry in self.entries:
-            result.setdefault(normalize_url(entry.url), entry)
+            try:
+                result.setdefault(normalize_url(entry.url), entry)
+            except ToolkitError:
+                continue
         return result
 
 
@@ -355,16 +360,58 @@ def parse_directives(value: str) -> set[str]:
     return {item.lower() for item in DIRECTIVE_SPLIT.split(value.strip()) if item}
 
 
+def decode_http_body(data: bytes, content_type: str = "") -> str:
+    """Decode an HTTP body using declared/BOM encodings with web-safe fallbacks."""
+    candidates: list[str] = []
+    header_match = CHARSET_RE.search(content_type or "")
+    if header_match:
+        candidates.append(header_match.group(1))
+    if data.startswith(codecs.BOM_UTF8):
+        candidates.insert(0, "utf-8-sig")
+    elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        candidates.insert(0, "utf-16")
+    elif data.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        candidates.insert(0, "utf-32")
+    meta_match = META_CHARSET_RE.search(data[:4096])
+    if meta_match:
+        raw = meta_match.group(1) or meta_match.group(2)
+        if raw:
+            candidates.append(raw.decode("ascii", errors="ignore"))
+    candidates.extend(["utf-8", "windows-1252"])
+    for encoding in dict.fromkeys(item.strip().lower() for item in candidates if item):
+        try:
+            codecs.lookup(encoding)
+            return data.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _normalized_hostname(hostname: str) -> str:
+    host = hostname.rstrip(".").lower()
+    if ":" in host:  # IPv6 literals are already ASCII and need brackets in a URL authority.
+        return host
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise ToolkitError(f"URL contains an invalid hostname: {hostname}") from exc
+
+
+def _authority_host(hostname: str) -> str:
+    return f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
+
+
 def normalize_url(value: str) -> str:
     parsed = require_http_url(value, "URL")
-    host = parsed.hostname.encode("idna").decode("ascii").lower() if parsed.hostname else ""
+    host = _normalized_hostname(parsed.hostname or "")
     try:
         port = parsed.port
     except ValueError as exc:
         raise ToolkitError(f"URL contains an invalid port: {value}") from exc
     if (parsed.scheme.lower() == "http" and port == 80) or (parsed.scheme.lower() == "https" and port == 443):
         port = None
-    netloc = host if port is None else f"{host}:{port}"
+    authority_host = _authority_host(host)
+    netloc = authority_host if port is None else f"{authority_host}:{port}"
     path = parsed.path or "/"
     return urlunsplit((parsed.scheme.lower(), netloc, path, parsed.query, ""))
 
@@ -380,7 +427,7 @@ def require_http_url(value: str, label: str) -> SplitResult:
 
 def origin_for(value: str) -> str:
     parsed = require_http_url(value, "URL")
-    host = parsed.hostname or ""
+    host = _authority_host(_normalized_hostname(parsed.hostname or ""))
     try:
         port = parsed.port
     except ValueError as exc:
@@ -390,14 +437,63 @@ def origin_for(value: str) -> str:
     return f"{parsed.scheme.lower()}://{host.lower()}"
 
 
+class ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Apply the caller's URL policy to every redirect before opening it."""
+
+    def __init__(self, validator: Callable[[str], None]) -> None:
+        super().__init__()
+        self.validator = validator
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> Optional[urllib.request.Request]:
+        resolved = urljoin(req.full_url, newurl)
+        require_http_url(resolved, "Redirect URL")
+        self.validator(resolved)
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
+
+
+def _bounded_gzip_decompress(data: bytes, max_bytes: int, url: str) -> bytes:
+    try:
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        output = decoder.decompress(data, max_bytes + 1)
+        if len(output) <= max_bytes:
+            output += decoder.flush(max_bytes + 1 - len(output))
+    except zlib.error as exc:
+        raise ToolkitError(f"Response used invalid gzip compression: {url}") from exc
+    if len(output) > max_bytes or decoder.unconsumed_tail:
+        raise ToolkitError(f"Decompressed response exceeded {max_bytes:,} bytes: {url}")
+    if not decoder.eof:
+        raise ToolkitError(f"Response used incomplete gzip compression: {url}")
+    return output
+
+
+def _read_response_body(response: Any, max_bytes: int, url: str) -> bytes:
+    data = response.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ToolkitError(f"Response exceeded {max_bytes:,} bytes: {url}")
+    if data[:2] == b"\x1f\x8b":
+        return _bounded_gzip_decompress(data, max_bytes, url)
+    return data
+
+
 def fetch_url(
     url: str,
     timeout: int,
     user_agent: str,
     accept: str = "text/html,application/xhtml+xml,application/xml,text/xml,text/plain,*/*",
     max_bytes: int = 10 * 1024 * 1024,
+    url_validator: Optional[Callable[[str], None]] = None,
 ) -> FetchResult:
     require_http_url(url, "URL")
+    if url_validator:
+        url_validator(url)
     request = urllib.request.Request(
         url,
         headers={
@@ -408,14 +504,10 @@ def fetch_url(
         method="GET",
     )
     started = time.perf_counter()
+    opener = urllib.request.build_opener(ValidatingRedirectHandler(url_validator)) if url_validator else urllib.request.build_opener()
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = response.read(max_bytes + 1)
-            if len(data) > max_bytes:
-                raise ToolkitError(f"Response exceeded {max_bytes:,} bytes: {url}")
-            encoding = response.headers.get("Content-Encoding", "").lower()
-            if encoding == "gzip" and data[:2] == b"\x1f\x8b":
-                data = gzip.decompress(data)
+        with opener.open(request, timeout=timeout) as response:
+            data = _read_response_body(response, max_bytes, url)
             return FetchResult(
                 requested_url=url,
                 final_url=response.geturl(),
@@ -425,13 +517,13 @@ def fetch_url(
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
     except urllib.error.HTTPError as exc:
-        data = exc.read(max_bytes + 1)
+        data = _read_response_body(exc, max_bytes, url)
         return FetchResult(
             requested_url=url,
             final_url=exc.geturl() or url,
             status=int(exc.code),
             headers={k.lower(): v for k, v in exc.headers.items()} if exc.headers else {},
-            data=data[:max_bytes],
+            data=data,
             elapsed_ms=int((time.perf_counter() - started) * 1000),
             error=str(exc),
         )
@@ -471,39 +563,49 @@ def fetch_sitemaps(
     timeout: int,
     user_agent: str,
     max_sitemaps: int = 1000,
+    max_entries: int = 1_000_000,
+    url_validator: Optional[Callable[[str], None]] = None,
 ) -> SitemapCollection:
     visited: set[str] = set()
     entries: list[SitemapEntry] = []
     errors: list[str] = []
     seen_counts: dict[str, int] = {}
+    root_list = list(dict.fromkeys(roots))
+    queue = collections.deque(root_list)
+    traversal_limited = False
+    entry_limited = False
 
-    def visit(url: str) -> None:
+    while queue and not entry_limited:
+        url = queue.popleft()
         try:
             normalized = normalize_url(url)
         except ToolkitError as exc:
             errors.append(str(exc))
-            return
+            continue
         if normalized in visited:
-            return
+            continue
         if len(visited) >= max_sitemaps:
-            errors.append(f"Sitemap traversal exceeded {max_sitemaps} files.")
-            return
+            if not traversal_limited:
+                errors.append(f"Sitemap traversal exceeded {max_sitemaps} files.")
+                traversal_limited = True
+            continue
         visited.add(normalized)
         result = fetch_url(
             url,
             timeout,
             user_agent,
             accept="application/xml,text/xml,text/plain,*/*",
-            max_bytes=60 * 1024 * 1024,
+            max_bytes=MAX_SITEMAP_BYTES,
+            url_validator=url_validator,
         )
         if result.status != 200:
             errors.append(f"Sitemap {url} returned HTTP {result.status or 'network error'}.")
-            return
+            continue
         try:
             root = ET.fromstring(result.text)
         except ET.ParseError as exc:
             errors.append(f"Sitemap {url} is invalid XML: {exc}.")
-            return
+            continue
         root_type = local_name(root.tag)
         if root_type == "sitemapindex":
             child_count = 0
@@ -513,14 +615,14 @@ def fetch_sitemaps(
                 for child in sitemap:
                     if local_name(child.tag) == "loc" and child.text and child.text.strip():
                         child_count += 1
-                        visit(child.text.strip())
+                        queue.append(child.text.strip())
                         break
             if child_count == 0:
                 errors.append(f"Sitemap index {url} has no child sitemap URLs.")
-            return
+            continue
         if root_type != "urlset":
             errors.append(f"Sitemap {url} has unsupported root <{root_type}>.")
-            return
+            continue
         for node in root:
             if local_name(node.tag) != "url":
                 continue
@@ -535,6 +637,11 @@ def fetch_sitemaps(
             if not loc:
                 errors.append(f"An <url> entry in {url} is missing <loc>.")
                 continue
+            if len(entries) >= max_entries:
+                if not entry_limited:
+                    errors.append(f"Sitemap inventory exceeded {max_entries:,} URL entries.")
+                    entry_limited = True
+                break
             entries.append(SitemapEntry(loc, lastmod, url))
             try:
                 key = normalize_url(loc)
@@ -542,9 +649,6 @@ def fetch_sitemaps(
                 key = loc
             seen_counts[key] = seen_counts.get(key, 0) + 1
 
-    root_list = list(dict.fromkeys(roots))
-    for root_url in root_list:
-        visit(root_url)
     duplicate_count = sum(count - 1 for count in seen_counts.values() if count > 1)
     return SitemapCollection(root_list, entries, sorted(visited), errors, duplicate_count)
 
@@ -1168,7 +1272,10 @@ def inspect_page_for_canonical(url: str, timeout: int, user_agent: str, expected
 
 
 def run_canonical(args: argparse.Namespace, console: Console) -> int:
-    collection = fetch_sitemaps([args.sitemap], args.timeout, args.user_agent, args.max_sitemaps)
+    collection = fetch_sitemaps(
+        [args.sitemap], args.timeout, args.user_agent,
+        args.max_sitemaps, args.max_urls,
+    )
     if not collection.entries:
         raise ToolkitError("No URLs were found in the sitemap.")
     urls = list(dict.fromkeys(entry.url for entry in collection.entries))
@@ -1218,7 +1325,10 @@ def run_canonical(args: argparse.Namespace, console: Console) -> int:
 
 
 def run_sitemap(args: argparse.Namespace, console: Console) -> int:
-    collection = fetch_sitemaps([args.sitemap], args.timeout, args.user_agent, args.max_sitemaps)
+    collection = fetch_sitemaps(
+        [args.sitemap], args.timeout, args.user_agent,
+        args.max_sitemaps, args.max_urls,
+    )
     entries = collection.entries
     unique: dict[str, SitemapEntry] = {}
     invalid: list[str] = []
@@ -1321,6 +1431,8 @@ def run_indexnow(args: argparse.Namespace, console: Console) -> int:
         ("--batch-size", args.batch_size),
         ("--delay", args.delay),
         ("--timeout", args.timeout),
+        ("--max-sitemaps", args.max_sitemaps),
+        ("--max-urls", args.max_urls),
     ]
     for flag, value in optional_pairs:
         if value is not None:
@@ -1355,6 +1467,7 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
         print(" 12. Start local graphical workbench")
         print(" 13. List scoring profiles")
         print(" 14. Open hosted graphical workbench")
+        print(" 15. Page Quality Audit")
         print("  0. Exit")
         choice = input("\nSelection: ").strip()
         print()
@@ -1386,6 +1499,7 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
                     timeout=30,
                     user_agent=DEFAULT_USER_AGENT,
                     max_sitemaps=1000,
+                    max_urls=1_000_000,
                     show_problems=20,
                     json=None,
                 )
@@ -1398,6 +1512,7 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
                     timeout=30,
                     user_agent=DEFAULT_USER_AGENT,
                     max_sitemaps=1000,
+                    max_urls=1_000_000,
                     show_problems=20,
                     json=None,
                 )
@@ -1415,6 +1530,8 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
                     batch_size=None,
                     delay=None,
                     timeout=None,
+                    max_sitemaps=1000,
+                    max_urls=1_000_000,
                     show_urls=False,
                     dry_run=dry,
                 )
@@ -1483,6 +1600,14 @@ def interactive_loop(console: Console, profile_file: Optional[str]) -> int:
                 print(f"Opening {WORKBENCH_URL}")
                 webbrowser.open(WORKBENCH_URL)
                 print()
+            elif choice == "15":
+                from seo_index_quality import run_page
+                run_page(argparse.Namespace(
+                    url=prompt("Page URL"), timeout=30, user_agent=DEFAULT_USER_AGENT,
+                    json=prompt("JSON report path (optional)") or None,
+                    markdown=prompt("Markdown report path (optional)") or None,
+                    fail_on="never",
+                ), console)
             else:
                 print("Unknown selection.\n")
         except (ToolkitError, ValueError, KeyboardInterrupt) as exc:
@@ -1525,6 +1650,7 @@ def build_parser() -> argparse.ArgumentParser:
     canonical.add_argument("--limit", type=int, default=100, help="Maximum pages to check; 0 checks all.")
     canonical.add_argument("--workers", type=int, default=8)
     canonical.add_argument("--max-sitemaps", type=int, default=1000)
+    canonical.add_argument("--max-urls", type=int, default=1_000_000)
     canonical.add_argument("--show-problems", type=int, default=20)
     canonical.add_argument("--json")
     add_common_http_args(canonical)
@@ -1534,6 +1660,7 @@ def build_parser() -> argparse.ArgumentParser:
     sitemap.add_argument("--check-pages", type=int, default=0, help="Number of unique page URLs to request; 0 skips.")
     sitemap.add_argument("--workers", type=int, default=8)
     sitemap.add_argument("--max-sitemaps", type=int, default=1000)
+    sitemap.add_argument("--max-urls", type=int, default=1_000_000)
     sitemap.add_argument("--show-problems", type=int, default=20)
     sitemap.add_argument("--json")
     add_common_http_args(sitemap)
@@ -1547,8 +1674,22 @@ def build_parser() -> argparse.ArgumentParser:
     indexnow.add_argument("--batch-size", type=int)
     indexnow.add_argument("--delay", type=float)
     indexnow.add_argument("--timeout", type=int)
+    indexnow.add_argument("--max-sitemaps", type=int, default=1000)
+    indexnow.add_argument("--max-urls", type=int, default=1_000_000)
     indexnow.add_argument("--show-urls", action="store_true")
     indexnow.add_argument("--dry-run", action="store_true")
+
+    page = subparsers.add_parser("page", help="Audit page metadata, content, images, social previews, delivery, and security headers.")
+    page.add_argument("--url", required=True)
+    page.add_argument("--json", help="Write the complete evidence report as JSON.")
+    page.add_argument("--markdown", help="Write a human-readable Markdown report.")
+    page.add_argument(
+        "--fail-on",
+        choices=["critical", "warning", "never"],
+        default="critical",
+        help="Return exit code 2 for critical findings, warnings, or never.",
+    )
+    add_common_http_args(page)
 
     redirect = subparsers.add_parser("redirect", help="Trace and assess a redirect chain.")
     redirect.add_argument("--url", required=True)
@@ -1640,6 +1781,12 @@ def validate_cli(args: argparse.Namespace) -> None:
     max_pages = getattr(args, "max_pages", None)
     if max_pages is not None and not 1 <= max_pages <= 10000:
         raise ToolkitError("--max-pages must be between 1 and 10,000.")
+    max_sitemaps = getattr(args, "max_sitemaps", None)
+    if max_sitemaps is not None and not 1 <= max_sitemaps <= 10000:
+        raise ToolkitError("--max-sitemaps must be between 1 and 10,000.")
+    max_urls = getattr(args, "max_urls", None)
+    if max_urls is not None and not 1 <= max_urls <= 10_000_000:
+        raise ToolkitError("--max-urls must be between 1 and 10,000,000.")
     max_depth = getattr(args, "max_depth", None)
     if max_depth is not None and not 0 <= max_depth <= 50:
         raise ToolkitError("--max-depth must be between 0 and 50.")
@@ -1687,6 +1834,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         return run_sitemap(args, console)
     if command == "indexnow":
         return run_indexnow(args, console)
+    if command == "page":
+        from seo_index_quality import run_page
+        return run_page(args, console)
     if command in {"redirect", "robots", "hreflang", "schema", "geo", "aeo"}:
         from seo_index_extensions import (
             run_aeo, run_geo, run_hreflang, run_redirect, run_robots_matrix, run_schema,

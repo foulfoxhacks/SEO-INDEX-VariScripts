@@ -2,7 +2,11 @@
 
 ## Technical SEO
 
-Redirect Lab, Crawler Access Matrix, Hreflang Auditor, Structured Data Graph, Canonical Guard, Sitemap Doctor, Internal Link Graph, and search-readiness scoring.
+Page Quality Audit, Redirect Lab, Crawler Access Matrix, Hreflang Auditor, Structured Data Graph, Canonical Guard, Sitemap Doctor, Internal Link Graph, and search-readiness scoring.
+
+## Page quality
+
+Eligibility, search presentation, Open Graph and social cards, image alternatives and delivery, content structure, accessible link names, caching, response budgets, and browser-security headers.
 
 ## Site intelligence
 
@@ -28,4 +32,4 @@ The hosted workbench can build commands, explain matrices, visualize local JSON 
 
 ### Local live workbench
 
-`seo-index serve` hosts the same interface from loopback with a token-protected API. Local mode can run Internal Link Graph while keeping crawl targets and reports on the user's machine.
+`seo-index serve` hosts the same interface from loopback with a token-protected API. Local mode can run Internal Link Graph and Page Quality Audit while keeping crawl targets and reports on the user's machine.

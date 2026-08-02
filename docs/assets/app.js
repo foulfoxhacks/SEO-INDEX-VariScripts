@@ -2,6 +2,7 @@
 
 const tools = [
   {id:'score',name:'Index Readiness Score',cat:['seo','geo','aeo'],icon:'◉',desc:'Category scorecards for Google, Bing, general search, GEO, and AEO with evidence coverage and assurance.',tag:'seo-index score'},
+  {id:'page',name:'Page Quality Audit',cat:['seo'],icon:'◎',desc:'Deep-scan metadata, social previews, images, content structure, accessible links, delivery budgets, caching, and browser-security headers.',tag:'seo-index page'},
   {id:'links',name:'Internal Link Graph',cat:['seo'],icon:'⌬',desc:'Crawl one host into a relationship graph with depth, orphan, redirect, dead-end, noindex, and canonical findings.',tag:'seo-index links'},
   {id:'serve',name:'Local Live Workbench',cat:['seo','geo','aeo','indexing'],icon:'◫',desc:'Serve this dashboard from localhost with a token-protected live audit API. No cloud proxy required.',tag:'seo-index serve'},
   {id:'redirect',name:'Redirect Lab',cat:['seo'],icon:'↪',desc:'Trace every hop, loop, status, host change, HTTPS downgrade, temporary redirect, and final destination.',tag:'seo-index redirect'},
@@ -18,6 +19,8 @@ const tools = [
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const escapeHtml = (value='') => String(value).replace(/[&<>"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
+const safeNumber = (value, fallback=0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const safeScore = value => Math.min(100, Math.max(0, safeNumber(value)));
 
 function renderTools(filter='all') {
   const list = filter === 'all' ? tools : tools.filter(tool => tool.cat.includes(filter));
@@ -63,7 +66,7 @@ function buildCommand() {
     args.push('--html', './reports/internal-links.html');
   } else if (tool === 'serve') {
     args.push('--port', '8765');
-  } else if (['redirect','robots','hreflang','schema','geo','aeo'].includes(tool)) {
+  } else if (['page','redirect','robots','hreflang','schema','geo','aeo'].includes(tool)) {
     if (url) args.push('--url', url);
     if (tool === 'hreflang') args.push('--check-alternates');
   } else if (['canonical','sitemap'].includes(tool)) {
@@ -83,6 +86,7 @@ function updateCommand() {
   const tool = toolSelect.value;
   const notes = {
     indexnow: 'Starts in dry-run mode. Remove <code>--dry-run</code> only after validation succeeds.',
+    page: 'Creates a comprehensive JSON evidence report; add <code>--markdown</code> for a human-readable handoff.',
     links: 'Creates JSON evidence plus a standalone interactive HTML site graph.',
     serve: 'Starts a token-protected localhost server and opens the live graphical workbench.'
   };
@@ -129,23 +133,31 @@ function renderLinkSummary(data, target) {
   const summary = data.summary || {};
   target.innerHTML = `
     <div class="live-summary-grid">
-      <article><strong>${summary.pagesCrawled ?? 0}</strong><span>pages</span></article>
-      <article><strong>${summary.internalEdges ?? 0}</strong><span>internal edges</span></article>
-      <article><strong>${summary.brokenPages ?? 0}</strong><span>broken pages</span></article>
-      <article><strong>${summary.orphanCandidates ?? 0}</strong><span>orphan candidates</span></article>
+      <article><strong>${safeNumber(summary.pagesCrawled)}</strong><span>pages</span></article>
+      <article><strong>${safeNumber(summary.internalEdges)}</strong><span>internal edges</span></article>
+      <article><strong>${safeNumber(summary.brokenPages)}</strong><span>broken pages</span></article>
+      <article><strong>${safeNumber(summary.orphanCandidates)}</strong><span>orphan candidates</span></article>
     </div>`;
 }
 function renderReport(data) {
   const view = $('#report-view');
   view.classList.remove('report-empty');
   if (data.scores) {
-    view.innerHTML = data.scores.map(score => `
-      <section class="report-score"><div class="report-header"><div class="score-ring" style="--score:${score.assured_score ?? score.normalized_score};--green:${scoreColor(score.assured_score ?? score.normalized_score)}"><strong>${score.assured_score ?? score.normalized_score}</strong></div><div><h3>${escapeHtml(score.label)}</h3><div class="report-meta">verified ${score.verified_score ?? score.normalized_score}/100 · coverage ${score.coverage}% · ${escapeHtml(score.grade)}</div></div></div>${score.categories ? `<div class="score-summary">${Object.values(score.categories).map(category => `<div class="summary-card"><strong>${category.assuredScore}</strong><span>${escapeHtml(category.label)} · ${category.coverage}% coverage</span></div>`).join('')}</div>` : ''}</section>`).join('');
+    view.innerHTML = data.scores.map(score => {
+      const value = safeScore(score.assured_score ?? score.normalized_score);
+      const verified = safeScore(score.verified_score ?? score.normalized_score);
+      const coverage = safeScore(score.coverage);
+      return `<section class="report-score"><div class="report-header"><div class="score-ring" style="--score:${value};--green:${scoreColor(value)}"><strong>${value}</strong></div><div><h3>${escapeHtml(score.label)}</h3><div class="report-meta">verified ${verified}/100 · coverage ${coverage}% · ${escapeHtml(score.grade)}</div></div></div>${score.categories ? `<div class="score-summary">${Object.values(score.categories).map(category => `<div class="summary-card"><strong>${safeScore(category.assuredScore)}</strong><span>${escapeHtml(category.label)} · ${safeScore(category.coverage)}% coverage</span></div>`).join('')}</div>` : ''}</section>`;
+    }).join('');
     return;
   }
   if (data.tool === 'internal-link-graph' || data.schemaVersion === '3.0' && data.edges && data.pages) {
     renderLinkSummary(data, view);
     view.innerHTML += `<pre>${escapeHtml(JSON.stringify(data.findings, null, 2))}</pre>`;
+    return;
+  }
+  if (data.tool === 'page-quality' && data.sections) {
+    renderQuality(data, view);
     return;
   }
   if (data.report?.hops) {
@@ -182,7 +194,20 @@ $$('[data-tab]').forEach(button => button.addEventListener('click', () => {
   $('#' + button.dataset.tab).classList.add('active');
 }));
 function result(status, label, message) {
-  return `<div class="result-row"><span class="status ${status}">${status.toUpperCase()}</span><div><strong>${escapeHtml(label)}</strong><br><small>${escapeHtml(message)}</small></div></div>`;
+  const safeStatus = ['pass','warn','fail'].includes(status) ? status : 'warn';
+  return `<div class="result-row"><span class="status ${safeStatus}">${safeStatus.toUpperCase()}</span><div><strong>${escapeHtml(label)}</strong><br><small>${escapeHtml(message)}</small></div></div>`;
+}
+function renderQuality(data, target=$('#quality-results')) {
+  const summary = data.summary || {};
+  const sections = Object.entries(data.sections || {});
+  target.innerHTML = `
+    <div class="quality-summary">
+      <article><strong>${safeScore(summary.qualityScore)}</strong><span>quality score</span></article>
+      <article><strong>${safeNumber(summary.passed)}</strong><span>passed</span></article>
+      <article><strong>${safeNumber(summary.warnings)}</strong><span>warnings</span></article>
+      <article><strong>${safeNumber(summary.failures)}</strong><span>failures</span></article>
+    </div>
+    ${sections.map(([section, findings]) => `<section class="quality-section"><h3>${escapeHtml(section)}</h3>${findings.map(item => result(item.status, item.label, item.message)).join('')}</section>`).join('')}`;
 }
 $('#analyze-html').addEventListener('click', event => {
   event.preventDefault();
@@ -257,7 +282,10 @@ $('#analyze-redirect').addEventListener('click', event => {
 // files become live when served by `seo-index serve` from localhost.
 const localHosts = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const localToken = new URLSearchParams(location.search).get('token') || sessionStorage.getItem('seoIndexToken') || '';
-if (localToken) sessionStorage.setItem('seoIndexToken', localToken);
+if (localToken) {
+  sessionStorage.setItem('seoIndexToken', localToken);
+  if (new URLSearchParams(location.search).has('token')) history.replaceState(null, '', location.pathname + location.hash);
+}
 const localMode = localHosts.has(location.hostname) && Boolean(localToken);
 let liveData = null;
 let graphLabels = true;
@@ -280,18 +308,18 @@ function setLocalStatus(state, label, copy) {
   $('#local-api-copy').textContent = copy;
 }
 async function checkLocalApi() {
-  const button = $('#run-live-links');
+  const buttons = [$('#run-live-links'), $('#run-live-page')];
   if (!localMode) {
-    button.disabled = true;
+    buttons.forEach(button => { button.disabled = true; });
     setLocalStatus('offline', 'Hosted preview mode', 'Run seo-index serve to open a localhost copy with live audits enabled.');
     return;
   }
   try {
     const health = await localRequest('/api/health');
-    button.disabled = false;
+    buttons.forEach(button => { button.disabled = false; });
     setLocalStatus('online', `Local API online · v${health.version}`, 'Live requests stay between this browser and the localhost toolkit.');
   } catch (error) {
-    button.disabled = true;
+    buttons.forEach(button => { button.disabled = true; });
     setLocalStatus('offline', 'Local API unavailable', error.message);
   }
 }
@@ -353,6 +381,23 @@ $('#live-links-form').addEventListener('submit', async event => {
     $('#live-summary').innerHTML=`<p class="status fail">${escapeHtml(error.message)}</p>`; note.textContent='The live crawl did not complete.';
   } finally {
     button.disabled=false; button.textContent='Run Internal Link Graph'; note.classList.remove('live-loading');
+  }
+});
+$('#live-page-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!localMode) return;
+  const button=$('#run-live-page'), note=$('#quality-note'), target=$('#quality-results');
+  button.disabled=true; button.textContent='Auditing page…'; note.classList.add('live-loading');
+  target.innerHTML='<p>Fetching and evaluating page evidence…</p>';
+  try {
+    const data=await localRequest('/api/page',{method:'POST',body:JSON.stringify({url:$('#quality-url').value.trim()})});
+    renderQuality(data,target);
+    note.textContent=`Completed ${data.summary.checks} checks with ${data.summary.failures} critical finding(s).`;
+  } catch(error) {
+    target.innerHTML=`<p class="status fail">${escapeHtml(error.message)}</p>`;
+    note.textContent='The page audit did not complete.';
+  } finally {
+    button.disabled=false; button.textContent='Run Page Quality Audit'; note.classList.remove('live-loading');
   }
 });
 $('#fit-live-graph').addEventListener('click',drawLiveGraph);

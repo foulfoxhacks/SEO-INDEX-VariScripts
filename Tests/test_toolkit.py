@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import gzip
 import json
 import sys
 import threading
@@ -18,7 +19,9 @@ assert spec and spec.loader
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 import seo_index_extensions as extensions
+import seo_index_quality as quality
 import seo_index_site as site
+import indexnow_runner as indexnow
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -86,6 +89,14 @@ class Handler(BaseHTTPRequestHandler):
 </urlset>""".encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/xml")
+            self.end_headers(); self.wfile.write(body)
+        elif self.path == "/sitemap.xml.gz":
+            body = gzip.compress(f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>{host}/</loc><lastmod>2026-07-29</lastmod></url>
+</urlset>""".encode())
+            self.send_response(200)
+            self.send_header("Content-Type", "application/gzip")
             self.end_headers(); self.wfile.write(body)
         elif self.path == "/fixture-key.txt":
             body = b"abcdef1234567890"
@@ -159,6 +170,18 @@ class ToolkitTests(unittest.TestCase):
         self.assertEqual(len(collection.entries), 2)
         self.assertFalse(collection.errors)
 
+    def test_gzip_sitemap_without_content_encoding(self):
+        collection = module.fetch_sitemaps([self.origin + "/sitemap.xml.gz"], 5, "test-agent")
+        self.assertEqual(len(collection.entries), 1)
+        self.assertFalse(collection.errors)
+
+    def test_sitemap_inventory_limit(self):
+        collection = module.fetch_sitemaps(
+            [self.origin + "/sitemap.xml"], 5, "test-agent", max_entries=1,
+        )
+        self.assertEqual(len(collection.entries), 1)
+        self.assertTrue(any("inventory exceeded" in error for error in collection.errors))
+
     def test_internal_link_graph(self):
         report = site.crawl_internal_links(
             self.origin + "/",
@@ -192,6 +215,70 @@ class ToolkitTests(unittest.TestCase):
 
     def test_private_target_detection(self):
         self.assertTrue(site._is_private_target(self.origin + "/"))
+
+    def test_page_quality_report(self):
+        report = quality.audit_page(self.origin + "/", 5, "test-agent")
+        payload = report.to_dict()
+        self.assertEqual(payload["tool"], "page-quality")
+        self.assertGreaterEqual(payload["summary"]["checks"], 20)
+        self.assertIn("Search presentation", payload["sections"])
+        self.assertEqual(payload["summary"]["failures"], 0)
+        json.dumps(payload)
+
+    def test_page_quality_markdown(self):
+        report = quality.audit_page(self.origin + "/", 5, "test-agent")
+        output = Path(__file__).with_name("_page_quality.md")
+        try:
+            quality.write_markdown(report, str(output))
+            content = output.read_text(encoding="utf-8")
+            self.assertIn("# Page Quality Audit", content)
+            self.assertIn("## Browser security", content)
+        finally:
+            output.unlink(missing_ok=True)
+
+    def test_redirect_validator_checks_every_hop(self):
+        seen = []
+
+        def validate(url):
+            seen.append(url)
+            if url == self.origin + "/":
+                raise module.ToolkitError("blocked redirect")
+
+        with self.assertRaisesRegex(module.ToolkitError, "blocked redirect"):
+            module.fetch_url(self.origin + "/redirect", 5, "test-agent", url_validator=validate)
+        self.assertEqual(seen, [self.origin + "/redirect", self.origin + "/"])
+
+    def test_bounded_gzip_decompression(self):
+        compressed = gzip.compress(b"x" * 4096)
+        with self.assertRaisesRegex(module.ToolkitError, "Decompressed response exceeded"):
+            module._bounded_gzip_decompress(compressed, 128, "https://example.com/")
+
+    def test_declared_charset_decoding(self):
+        fetch = module.FetchResult(
+            requested_url="https://example.com/", final_url="https://example.com/",
+            status=200, headers={"content-type": "text/html; charset=windows-1252"},
+            data="<p>café</p>".encode("windows-1252"), elapsed_ms=1,
+        )
+        self.assertIn("café", fetch.text)
+
+    def test_ipv6_url_normalization(self):
+        self.assertEqual(module.normalize_url("http://[::1]:80/a#b"), "http://[::1]/a")
+        self.assertEqual(module.origin_for("https://[2001:db8::1]:8443/a"), "https://[2001:db8::1]:8443")
+
+    def test_current_ai_crawler_matrix(self):
+        for agent in ("OAI-AdsBot", "Claude-SearchBot", "Claude-User", "Perplexity-User"):
+            self.assertIn(agent, extensions.AI_CRAWLERS)
+
+    def test_page_command_parser(self):
+        args = module.build_parser().parse_args(["page", "--url", self.origin + "/", "--fail-on", "never"])
+        self.assertEqual(args.command, "page")
+        self.assertEqual(args.fail_on, "never")
+
+    def test_indexnow_sitemap_inventory_limit(self):
+        with self.assertRaisesRegex(indexnow.RunnerError, "max-urls"):
+            indexnow.collect_sitemap_urls(
+                [self.origin + "/sitemap.xml"], 5, "test-agent", max_sitemaps=10, max_urls=1,
+            )
 
 
 if __name__ == "__main__":

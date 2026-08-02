@@ -49,6 +49,7 @@ try {
         'Py+Linux\Scripts\seo_index_toolkit.py',
         'Py+Linux\Scripts\seo_index_extensions.py',
         'Py+Linux\Scripts\seo_index_site.py',
+        'Py+Linux\Scripts\seo_index_quality.py',
         'docs\index.html',
         'Config\engine_profiles.json'
     )
